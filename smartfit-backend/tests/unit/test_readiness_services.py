@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from src.domain.common.enums import MuscleGroup, WorkoutSource, WorkoutStatus
+from src.domain.common.enums import Goal, MuscleGroup, WorkoutSource, WorkoutStatus
 from src.domain.common.exceptions import ValidationError
 from src.domain.health.entities import HealthSummary, ManualCheckin
 from src.domain.readiness.services import ReadinessCalculator
@@ -54,15 +54,21 @@ def test_readiness_calculator_high_score() -> None:
 
 def test_workout_safety_policy_blocks_normal_workout_when_readiness_very_low() -> None:
     policy = WorkoutSafetyPolicy()
+    today = date.today()
     plan = WorkoutPlan(
         id=uuid4(),
         user_id=uuid4(),
+        target_date=today,
         title="Push Day",
+        goal=Goal.STRENGTH,
         focus=MuscleGroup.CHEST,
         status=WorkoutStatus.GENERATED,
         source=WorkoutSource.AI,
+        estimated_duration_minutes=45,
         readiness_score=15,
         decision="normal_volume",
+        ai_reasoning_summary="test",
+        safety_note="test",
         exercises=[
             WorkoutPlanExercise(
                 id=uuid4(),
@@ -72,6 +78,8 @@ def test_workout_safety_policy_blocks_normal_workout_when_readiness_very_low() -
                 target_sets=4,
                 target_reps="8-10",
                 target_rpe=8,
+                target_weight=None,
+                rest_seconds=90,
                 notes=None,
             )
         ],

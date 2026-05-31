@@ -4,7 +4,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from src.domain.common.enums import EquipmentType
+from src.domain.common.enums import EquipmentType, WorkoutStyle
 from src.domain.user.entities import (
     NotificationSetting,
     User,
@@ -89,6 +89,9 @@ class SQLModelUserRepository(UserRepository):
             for model in result.scalars().all()
         ]
 
+    async def get_equipment(self, user_id: UUID) -> list[UserEquipment]:
+        return await self.list_equipment(user_id)
+
     async def save_profile(self, profile: UserProfile) -> UserProfile:
         statement = select(UserProfileModel).where(
             UserProfileModel.user_id == profile.user_id
@@ -130,6 +133,24 @@ class SQLModelUserRepository(UserRepository):
         self.session.add_all(rows)
         await self.session.flush()
         return equipment
+
+    async def get_preference(self, user_id: UUID) -> UserPreference | None:
+        statement = select(UserPreferenceModel).where(UserPreferenceModel.user_id == user_id)
+        result = await self.session.execute(statement)
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None
+        return UserPreference(
+            id=model.id,
+            user_id=model.user_id,
+            workout_style=WorkoutStyle(model.workout_style),
+            preferred_workout_days=list(model.preferred_workout_days or []),
+            preferred_session_minutes=model.preferred_session_minutes,
+            dislikes=list(model.dislikes or []),
+            metadata=dict(model.preference_metadata or {}),
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
 
     async def save_preference(self, preference: UserPreference) -> UserPreference:
         statement = select(UserPreferenceModel).where(

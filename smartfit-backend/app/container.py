@@ -5,6 +5,10 @@ from src.application.auth.use_cases import (
     RefreshTokenUseCase,
     RegisterUserUseCase,
 )
+from src.application.exercise.use_cases import (
+    GetExerciseByIdUseCase,
+    ListExercisesUseCase,
+)
 from src.application.health.use_cases import (
     GetLatestHealthSummaryUseCase,
     SaveHealthSummaryUseCase,
@@ -13,6 +17,7 @@ from src.application.health.use_cases import (
 from src.application.progress.use_cases import (
     GetPersonalRecordsUseCase,
     GetProgressOverviewUseCase,
+    GetWeeklyReportUseCase,
 )
 from src.application.readiness.use_cases import (
     CalculateReadinessUseCase,
@@ -33,12 +38,21 @@ from src.application.workout.use_cases import (
     StartWorkoutUseCase,
 )
 from src.domain.readiness.services import ReadinessCalculator
+from src.domain.workout.services import (
+    RuleBasedWorkoutGenerator,
+    WorkoutSafetyPolicy,
+    WorkoutVolumeCalculator,
+)
 from src.infrastructure.ai.ai_client import AIClient
+from src.infrastructure.repositories.exercise_repository import SQLModelExerciseRepository
 from src.infrastructure.repositories.health_repository import SQLModelHealthRepository
 from src.infrastructure.repositories.readiness_repository import SQLModelReadinessRepository
 from src.infrastructure.repositories.user_repository import SQLModelUserRepository
+from src.infrastructure.repositories.workout_repository import SQLModelWorkoutRepository
+from src.infrastructure.repositories.progress_repository import SQLModelProgressRepository
 from src.infrastructure.security.jwt_provider import JWTProvider
 from src.infrastructure.security.password_hasher import PasswordHasher
+from src.domain.progress.services import ProgressCalculator
 
 
 class Container:
@@ -47,6 +61,10 @@ class Container:
         self.ai_client = AIClient()
         self.password_hasher = PasswordHasher()
         self.jwt_provider = JWTProvider()
+        self.workout_generator = RuleBasedWorkoutGenerator()
+        self.workout_safety_policy = WorkoutSafetyPolicy()
+        self.workout_volume_calculator = WorkoutVolumeCalculator()
+        self.progress_calculator = ProgressCalculator()
 
     def register_user_use_case(self, session: AsyncSession) -> RegisterUserUseCase:
         return RegisterUserUseCase(
@@ -75,6 +93,39 @@ class Container:
         self, session: AsyncSession
     ) -> UpdateUserEquipmentUseCase:
         return UpdateUserEquipmentUseCase(SQLModelUserRepository(session))
+
+    def get_exercise_repository(
+        self, session: AsyncSession
+    ) -> SQLModelExerciseRepository:
+        return SQLModelExerciseRepository(session)
+
+    def get_user_repository(self, session: AsyncSession) -> SQLModelUserRepository:
+        return SQLModelUserRepository(session)
+
+    def get_readiness_repository(
+        self, session: AsyncSession
+    ) -> SQLModelReadinessRepository:
+        return SQLModelReadinessRepository(session)
+
+    def get_workout_repository(
+        self, session: AsyncSession
+    ) -> SQLModelWorkoutRepository:
+        return SQLModelWorkoutRepository(session)
+
+    def get_progress_repository(
+        self, session: AsyncSession
+    ) -> SQLModelProgressRepository:
+        return SQLModelProgressRepository(session)
+
+    def list_exercises_use_case(
+        self, session: AsyncSession
+    ) -> ListExercisesUseCase:
+        return ListExercisesUseCase(self.get_exercise_repository(session))
+
+    def get_exercise_by_id_use_case(
+        self, session: AsyncSession
+    ) -> GetExerciseByIdUseCase:
+        return GetExerciseByIdUseCase(self.get_exercise_repository(session))
 
     def save_health_summary_use_case(
         self, session: AsyncSession
@@ -115,29 +166,65 @@ class Container:
     ) -> GetReadinessHistoryUseCase:
         return GetReadinessHistoryUseCase(SQLModelReadinessRepository(session))
 
-    def generate_workout_use_case(self) -> GenerateWorkoutUseCase:
-        return GenerateWorkoutUseCase()
+    def generate_workout_use_case(
+        self, session: AsyncSession
+    ) -> GenerateWorkoutUseCase:
+        return GenerateWorkoutUseCase(
+            user_repository=self.get_user_repository(session),
+            readiness_repository=self.get_readiness_repository(session),
+            exercise_repository=self.get_exercise_repository(session),
+            workout_repository=self.get_workout_repository(session),
+            generator=self.workout_generator,
+            safety_policy=self.workout_safety_policy,
+        )
 
-    def get_workout_detail_use_case(self) -> GetWorkoutDetailUseCase:
-        return GetWorkoutDetailUseCase()
+    def get_workout_detail_use_case(
+        self, session: AsyncSession
+    ) -> GetWorkoutDetailUseCase:
+        return GetWorkoutDetailUseCase(self.get_workout_repository(session))
 
-    def start_workout_use_case(self) -> StartWorkoutUseCase:
-        return StartWorkoutUseCase()
+    def start_workout_use_case(self, session: AsyncSession) -> StartWorkoutUseCase:
+        return StartWorkoutUseCase(self.get_workout_repository(session))
 
-    def log_workout_set_use_case(self) -> LogWorkoutSetUseCase:
-        return LogWorkoutSetUseCase()
+    def log_workout_set_use_case(
+        self, session: AsyncSession
+    ) -> LogWorkoutSetUseCase:
+        return LogWorkoutSetUseCase(self.get_workout_repository(session))
 
-    def complete_workout_use_case(self) -> CompleteWorkoutUseCase:
-        return CompleteWorkoutUseCase()
+    def complete_workout_use_case(
+        self, session: AsyncSession
+    ) -> CompleteWorkoutUseCase:
+        return CompleteWorkoutUseCase(
+            self.get_workout_repository(session), self.workout_volume_calculator
+        )
 
-    def get_workout_history_use_case(self) -> GetWorkoutHistoryUseCase:
-        return GetWorkoutHistoryUseCase()
+    def get_workout_history_use_case(
+        self, session: AsyncSession
+    ) -> GetWorkoutHistoryUseCase:
+        return GetWorkoutHistoryUseCase(self.get_workout_repository(session))
 
-    def get_progress_overview_use_case(self) -> GetProgressOverviewUseCase:
-        return GetProgressOverviewUseCase()
+    def get_progress_overview_use_case(
+        self, session: AsyncSession
+    ) -> GetProgressOverviewUseCase:
+        return GetProgressOverviewUseCase(
+            self.get_progress_repository(session),
+            self.get_user_repository(session),
+            self.progress_calculator,
+        )
 
-    def get_personal_records_use_case(self) -> GetPersonalRecordsUseCase:
-        return GetPersonalRecordsUseCase()
+    def get_personal_records_use_case(
+        self, session: AsyncSession
+    ) -> GetPersonalRecordsUseCase:
+        return GetPersonalRecordsUseCase(
+            self.get_progress_repository(session), self.progress_calculator
+        )
+
+    def get_weekly_report_use_case(
+        self, session: AsyncSession
+    ) -> GetWeeklyReportUseCase:
+        return GetWeeklyReportUseCase(
+            self.get_progress_overview_use_case(session), self.progress_calculator
+        )
 
 
 container = Container()

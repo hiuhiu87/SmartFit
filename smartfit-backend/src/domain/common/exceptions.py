@@ -12,3 +12,7 @@ class NotFoundError(DomainError):
 
 class UnauthorizedError(DomainError):
     """Raised when an operation is not permitted."""
+
+
+class InvalidWorkoutStateError(ValidationError):
+    """Raised when a workout lifecycle transition is invalid."""

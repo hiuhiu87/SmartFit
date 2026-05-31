@@ -1,5 +1,6 @@
 from src.domain.common.enums import (
     AuthProvider,
+    DifficultyFeedback,
     EquipmentType,
     Goal,
     MuscleGroup,
@@ -13,7 +14,13 @@ from src.domain.exercise.entities import Exercise
 from src.domain.health.entities import HealthSummary, ManualCheckin
 from src.domain.readiness.entities import ReadinessScore
 from src.domain.user.entities import User, UserProfile
-from src.domain.workout.entities import WorkoutPlan
+from src.domain.workout.entities import (
+    WorkoutFeedback,
+    WorkoutLog,
+    WorkoutPlan,
+    WorkoutPlanExercise,
+    WorkoutSetLog,
+)
 from src.infrastructure.database.models.exercise_model import ExerciseModel
 from src.infrastructure.database.models.health_model import (
     HealthSummaryModel,
@@ -21,7 +28,13 @@ from src.infrastructure.database.models.health_model import (
 )
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
 from src.infrastructure.database.models.user_model import UserModel, UserProfileModel
-from src.infrastructure.database.models.workout_model import WorkoutPlanModel
+from src.infrastructure.database.models.workout_model import (
+    WorkoutFeedbackModel,
+    WorkoutLogModel,
+    WorkoutPlanExerciseModel,
+    WorkoutPlanModel,
+    WorkoutSetLogModel,
+)
 
 
 def user_model_to_domain(model: UserModel) -> User:
@@ -187,8 +200,13 @@ def exercise_model_to_domain(model: ExerciseModel) -> Exercise:
         muscle_group=MuscleGroup(model.muscle_group),
         equipment_type=EquipmentType(model.equipment_type),
         training_level=TrainingLevel(model.training_level),
+        secondary_muscles=list(model.secondary_muscles or []),
+        movement_type=model.movement_type,
+        instruction=model.instruction,
+        safety_notes=model.safety_notes,
         instructions=list(model.instructions),
         metadata=dict(model.exercise_metadata),
+        is_active=model.is_active,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -203,8 +221,13 @@ def exercise_domain_to_model(entity: Exercise) -> ExerciseModel:
         muscle_group=entity.muscle_group.value,
         equipment_type=entity.equipment_type.value,
         training_level=entity.training_level.value,
+        secondary_muscles=entity.secondary_muscles,
+        movement_type=entity.movement_type,
+        instruction=entity.instruction,
+        safety_notes=entity.safety_notes,
         instructions=entity.instructions,
         exercise_metadata=entity.metadata,
+        is_active=entity.is_active,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
     )
@@ -214,12 +237,17 @@ def workout_plan_model_to_domain(model: WorkoutPlanModel) -> WorkoutPlan:
     return WorkoutPlan(
         id=model.id,
         user_id=model.user_id,
+        target_date=model.target_date,
         title=model.title,
+        goal=Goal(model.goal),
         focus=MuscleGroup(model.focus),
         status=WorkoutStatus(model.status),
         source=WorkoutSource(model.source),
+        estimated_duration_minutes=model.estimated_duration_minutes,
         readiness_score=model.readiness_score,
         decision=model.decision,
+        ai_reasoning_summary=model.ai_reasoning_summary,
+        safety_note=model.safety_note,
         exercises=[],
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -230,12 +258,153 @@ def workout_plan_domain_to_model(entity: WorkoutPlan) -> WorkoutPlanModel:
     return WorkoutPlanModel(
         id=entity.id,
         user_id=entity.user_id,
+        target_date=entity.target_date,
         title=entity.title,
+        goal=entity.goal.value,
         focus=entity.focus.value,
         status=entity.status.value,
         source=entity.source.value,
+        estimated_duration_minutes=entity.estimated_duration_minutes,
         readiness_score=entity.readiness_score,
         decision=entity.decision,
+        ai_reasoning_summary=entity.ai_reasoning_summary,
+        safety_note=entity.safety_note,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
+    )
+
+
+def workout_plan_exercise_model_to_domain(
+    model: WorkoutPlanExerciseModel,
+) -> WorkoutPlanExercise:
+    return WorkoutPlanExercise(
+        id=model.id,
+        workout_plan_id=model.workout_plan_id,
+        exercise_id=model.exercise_id,
+        order_index=model.order_index,
+        target_sets=model.target_sets,
+        target_reps=model.target_reps,
+        target_rpe=model.target_rpe,
+        target_weight=model.target_weight,
+        rest_seconds=model.rest_seconds,
+        notes=model.notes,
+        name=None,
+        primary_muscle=None,
+        equipment=None,
+        logged_sets=[],
+    )
+
+
+def workout_plan_exercise_domain_to_model(
+    entity: WorkoutPlanExercise,
+) -> WorkoutPlanExerciseModel:
+    return WorkoutPlanExerciseModel(
+        id=entity.id,
+        workout_plan_id=entity.workout_plan_id,
+        exercise_id=entity.exercise_id,
+        order_index=entity.order_index,
+        target_sets=entity.target_sets,
+        target_reps=entity.target_reps,
+        target_rpe=entity.target_rpe,
+        target_weight=entity.target_weight,
+        rest_seconds=entity.rest_seconds,
+        notes=entity.notes,
+    )
+
+
+def workout_log_model_to_domain(model: WorkoutLogModel) -> WorkoutLog:
+    return WorkoutLog(
+        id=model.id,
+        workout_plan_id=model.workout_plan_id,
+        user_id=model.user_id,
+        title=None,
+        focus_muscle=None,
+        started_at=model.started_at,
+        completed_at=model.completed_at,
+        duration_minutes=model.duration_minutes,
+        total_volume=model.total_volume,
+        calories_burned=model.calories_burned,
+        avg_heart_rate=model.avg_heart_rate,
+        notes=model.notes,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def workout_log_domain_to_model(entity: WorkoutLog) -> WorkoutLogModel:
+    return WorkoutLogModel(
+        id=entity.id,
+        workout_plan_id=entity.workout_plan_id,
+        user_id=entity.user_id,
+        started_at=entity.started_at,
+        completed_at=entity.completed_at,
+        duration_minutes=entity.duration_minutes,
+        total_volume=entity.total_volume,
+        calories_burned=entity.calories_burned,
+        avg_heart_rate=entity.avg_heart_rate,
+        notes=entity.notes,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
+    )
+
+
+def workout_set_log_model_to_domain(model: WorkoutSetLogModel) -> WorkoutSetLog:
+    return WorkoutSetLog(
+        id=model.id,
+        workout_log_id=model.workout_log_id,
+        workout_plan_exercise_id=model.workout_plan_exercise_id,
+        set_number=model.set_number,
+        reps_completed=model.reps_completed,
+        weight_kg=model.weight_kg,
+        rpe=model.rpe,
+        completed=model.completed,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def workout_set_log_domain_to_model(entity: WorkoutSetLog) -> WorkoutSetLogModel:
+    return WorkoutSetLogModel(
+        id=entity.id,
+        workout_log_id=entity.workout_log_id,
+        workout_plan_exercise_id=entity.workout_plan_exercise_id,
+        set_number=entity.set_number,
+        reps_completed=entity.reps_completed,
+        weight_kg=entity.weight_kg,
+        rpe=entity.rpe,
+        completed=entity.completed,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
+    )
+
+
+def workout_feedback_model_to_domain(model: WorkoutFeedbackModel) -> WorkoutFeedback:
+    return WorkoutFeedback(
+        id=model.id,
+        workout_log_id=model.workout_log_id,
+        difficulty_feedback=(
+            DifficultyFeedback(model.difficulty_feedback)
+            if model.difficulty_feedback is not None
+            else None
+        ),
+        energy_after=model.energy_after,
+        comments=model.comments,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def workout_feedback_domain_to_model(entity: WorkoutFeedback) -> WorkoutFeedbackModel:
+    return WorkoutFeedbackModel(
+        id=entity.id,
+        workout_log_id=entity.workout_log_id,
+        difficulty_feedback=(
+            entity.difficulty_feedback.value
+            if entity.difficulty_feedback is not None
+            else None
+        ),
+        energy_after=entity.energy_after,
+        comments=entity.comments,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
     )

@@ -36,6 +36,10 @@ class UserRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_equipment(self, user_id: UUID) -> list[UserEquipment]:
+        raise NotImplementedError
+
+    @abstractmethod
     async def save_profile(self, profile: UserProfile) -> UserProfile:
         raise NotImplementedError
 
@@ -43,6 +47,10 @@ class UserRepository(ABC):
     async def replace_equipment(
         self, user_id: UUID, equipment: list[UserEquipment]
     ) -> list[UserEquipment]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_preference(self, user_id: UUID) -> UserPreference | None:
         raise NotImplementedError
 
     @abstractmethod

@@ -168,12 +168,34 @@ alembic revision --autogenerate -m "init"
 alembic upgrade head
 ```
 
-Or use the helper script and pass only the message:
+Or use the helper script:
 
 ```bash
 chmod +x run-migration.sh
 ./run-migration.sh "init schema"
 ```
+
+Apply existing revisions:
+
+```bash
+./run-migration.sh upgrade
+```
+
+One-shot generate then apply:
+
+```bash
+RUN_UPGRADE=1 ./run-migration.sh "init schema"
+FORCE_APPLY=1 RUN_UPGRADE=1 ./run-migration.sh "init schema"
+```
+
+Notes:
+
+- `./run-migration.sh "message"` now only creates a revision by default
+- the script refuses to generate a new revision if your database is not already at Alembic `head`
+- use `./run-migration.sh upgrade` to apply existing revisions
+- the script inspects the generated revision before allowing `RUN_UPGRADE=1`
+- if it detects risky patterns such as `add_column(... nullable=False)` it will stop and ask you to review the file manually
+- this is intentional because autogenerate often breaks on existing tables with data
 
 Current repo state:
 

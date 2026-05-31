@@ -14,8 +14,13 @@ class Exercise:
     muscle_group: MuscleGroup = MuscleGroup.FULL_BODY
     equipment_type: EquipmentType = EquipmentType.BODYWEIGHT
     training_level: TrainingLevel = TrainingLevel.BEGINNER
+    secondary_muscles: list[str] = field(default_factory=list)
+    movement_type: str | None = None
+    instruction: str | None = None
+    safety_notes: str | None = None
     instructions: list[str] = field(default_factory=list)
     metadata: dict[str, str] = field(default_factory=dict)
+    is_active: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

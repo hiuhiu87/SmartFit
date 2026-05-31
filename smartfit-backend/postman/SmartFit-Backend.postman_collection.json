@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "4ea942d2-8f8f-4a92-b3d7-4306dbe5a6a7",
+    "_postman_id": "82f4fcb7-3948-4953-b072-37ffb0b6fbef",
     "name": "SmartFit Backend",
-    "description": "Postman collection for the SmartFit FastAPI backend. Auth requests save access and refresh tokens into collection variables automatically.",
+    "description": "Postman collection aligned with the current SmartFit backend routes. Login and refresh requests automatically store bearer tokens into collection variables.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -37,12 +37,20 @@
       "value": ""
     },
     {
+      "key": "exerciseId",
+      "value": ""
+    },
+    {
       "key": "workoutId",
       "value": "11111111-1111-1111-1111-111111111111"
     },
     {
-      "key": "exerciseId",
-      "value": "11111111-1111-1111-1111-111111111111"
+      "key": "workoutLogId",
+      "value": ""
+    },
+    {
+      "key": "workoutPlanExerciseId",
+      "value": ""
     }
   ],
   "item": [
@@ -77,8 +85,7 @@
                 "auth",
                 "register"
               ]
-            },
-            "description": "Create a new user account."
+            }
           }
         },
         {
@@ -124,8 +131,7 @@
                 "auth",
                 "login"
               ]
-            },
-            "description": "Login and save access/refresh tokens into collection variables."
+            }
           }
         },
         {
@@ -171,8 +177,7 @@
                 "auth",
                 "refresh"
               ]
-            },
-            "description": "Exchange refresh token for a new access/refresh token pair."
+            }
           }
         }
       ]
@@ -195,8 +200,7 @@
                 "users",
                 "me"
               ]
-            },
-            "description": "Return current authenticated user, profile, and equipment."
+            }
           }
         },
         {
@@ -225,8 +229,7 @@
                 "me",
                 "profile"
               ]
-            },
-            "description": "Upsert current user profile."
+            }
           }
         },
         {
@@ -255,8 +258,7 @@
                 "me",
                 "equipment"
               ]
-            },
-            "description": "Replace the current user's equipment list."
+            }
           }
         }
       ]
@@ -276,7 +278,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"date\": \"2026-05-31\",\n  \"sleep_hours\": 7.5,\n  \"sleep_efficiency\": 0.89,\n  \"resting_heart_rate\": 56,\n  \"heart_rate_variability\": 62.0,\n  \"steps\": 9200,\n  \"active_energy_kcal\": 540,\n  \"source\": \"healthkit\"\n}"
+              "raw": "{\n  \"date\": \"2026-05-31\",\n  \"sleep_hours\": 7.5,\n  \"sleep_efficiency\": 89,\n  \"resting_heart_rate\": 56,\n  \"heart_rate_variability\": 62,\n  \"steps\": 9100,\n  \"active_energy_kcal\": 520\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/health/summary",
@@ -289,8 +291,7 @@
                 "health",
                 "summary"
               ]
-            },
-            "description": "Current implementation is a use-case stub and does not require auth."
+            }
           }
         },
         {
@@ -305,7 +306,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"date\": \"2026-05-31\",\n  \"energy\": 4,\n  \"soreness\": 2,\n  \"stress\": 2,\n  \"motivation\": 5,\n  \"sleep_quality\": 4,\n  \"notes\": \"Feeling solid\"\n}"
+              "raw": "{\n  \"date\": \"2026-05-31\",\n  \"energy\": 4,\n  \"soreness\": 2,\n  \"stress\": 2,\n  \"motivation\": 5,\n  \"sleep_quality\": 4,\n  \"notes\": \"Feeling good\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/health/manual-checkin",
@@ -318,8 +319,25 @@
                 "health",
                 "manual-checkin"
               ]
-            },
-            "description": "Current implementation is a use-case stub and does not require auth."
+            }
+          }
+        },
+        {
+          "name": "Get Latest Summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health/latest-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health",
+                "latest-summary"
+              ]
+            }
           }
         }
       ]
@@ -370,8 +388,7 @@
                 "readiness",
                 "today"
               ]
-            },
-            "description": "Currently returns 501 TODO."
+            }
           }
         },
         {
@@ -389,8 +406,7 @@
                 "readiness",
                 "history"
               ]
-            },
-            "description": "Currently returns 501 TODO."
+            }
           }
         }
       ]
@@ -400,10 +416,28 @@
       "item": [
         {
           "name": "List Exercises",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const firstId = json?.data?.items?.[0]?.id;",
+                  "if (pm.response.code === 200 && firstId) {",
+                  "  pm.collectionVariables.set('exerciseId', firstId);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/v1/exercises",
+              "raw": "{{baseUrl}}/api/v1/exercises?limit=20&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -411,14 +445,149 @@
                 "api",
                 "v1",
                 "exercises"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
               ]
-            },
-            "description": "Currently returns an empty list stub."
+            }
           }
         },
         {
-          "name": "Replace Exercise",
+          "name": "List Exercises By Chest",
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/exercises?primary_muscle=chest&limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "exercises"
+              ],
+              "query": [
+                {
+                  "key": "primary_muscle",
+                  "value": "chest"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Exercises By Dumbbell",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/exercises?equipment=dumbbell&limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "exercises"
+              ],
+              "query": [
+                {
+                  "key": "equipment",
+                  "value": "dumbbell"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Exercises By Beginner",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/exercises?difficulty=beginner&limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "exercises"
+              ],
+              "query": [
+                {
+                  "key": "difficulty",
+                  "value": "beginner"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Exercise Detail",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/exercises/{{exerciseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "exercises",
+                "{{exerciseId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Replace Exercise Stub",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
               {
@@ -428,7 +597,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"exercise_id\": \"{{exerciseId}}\",\n  \"reason\": \"No bench available\"\n}"
+              "raw": "{\n  \"exercise_id\": \"{{exerciseId}}\",\n  \"reason\": \"No equipment available\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/exercises/replace",
@@ -441,8 +610,7 @@
                 "exercises",
                 "replace"
               ]
-            },
-            "description": "Currently returns a stub replacement response."
+            }
           }
         }
       ]
@@ -462,7 +630,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"focus\": \"full_body\",\n  \"available_minutes\": 45,\n  \"equipment_types\": [\"dumbbell\", \"bench\", \"bodyweight\"]\n}"
+              "raw": "{\n  \"date\": \"2026-05-31\",\n  \"focus_muscle\": \"chest\",\n  \"available_time_minutes\": 45,\n  \"equipment\": [\"dumbbell\", \"bench\", \"bodyweight\"],\n  \"avoid_exercises\": [],\n  \"user_note\": \"Feeling okay today.\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/workouts/generate",
@@ -476,7 +644,26 @@
                 "generate"
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const workoutId = json?.data?.workout_id;",
+                  "const firstExerciseId = json?.data?.exercises?.[0]?.workout_plan_exercise_id;",
+                  "if (pm.response.code === 200 && workoutId) {",
+                  "  pm.collectionVariables.set('workoutId', workoutId);",
+                  "}",
+                  "if (pm.response.code === 200 && firstExerciseId) {",
+                  "  pm.collectionVariables.set('workoutPlanExerciseId', firstExerciseId);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Workout Detail",
@@ -493,8 +680,7 @@
                 "workouts",
                 "{{workoutId}}"
               ]
-            },
-            "description": "Currently returns a minimal stub."
+            }
           }
         },
         {
@@ -509,7 +695,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{}"
+              "raw": "{\n  \"started_at\": \"2026-05-31T18:00:00Z\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/workouts/{{workoutId}}/start",
@@ -524,7 +710,22 @@
                 "start"
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const workoutLogId = json?.data?.workout_log_id;",
+                  "if (pm.response.code === 200 && workoutLogId) {",
+                  "  pm.collectionVariables.set('workoutLogId', workoutLogId);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Log Workout Set",
@@ -538,7 +739,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"exercise_id\": \"{{exerciseId}}\",\n  \"set_number\": 1,\n  \"reps\": 10,\n  \"weight\": 22.5,\n  \"rpe\": 7\n}"
+              "raw": "{\n  \"workout_log_id\": \"{{workoutLogId}}\",\n  \"workout_plan_exercise_id\": \"{{workoutPlanExerciseId}}\",\n  \"set_number\": 1,\n  \"weight\": 20,\n  \"reps\": 10,\n  \"rpe\": 7,\n  \"completed\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/workouts/{{workoutId}}/sets",
@@ -567,7 +768,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"feedback\": \"just_right\",\n  \"notes\": \"Solid session\"\n}"
+              "raw": "{\n  \"workout_log_id\": \"{{workoutLogId}}\",\n  \"completed_at\": \"2026-05-31T19:00:00Z\",\n  \"duration_minutes\": 58,\n  \"calories_burned\": 310,\n  \"avg_heart_rate\": 128,\n  \"difficulty_feedback\": \"just_right\",\n  \"energy_after\": 7,\n  \"notes\": \"Good session.\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/workouts/{{workoutId}}/complete",
@@ -589,7 +790,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/v1/workouts/history",
+              "raw": "{{baseUrl}}/api/v1/workouts/history?limit=20&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -598,6 +799,16 @@
                 "v1",
                 "workouts",
                 "history"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
               ]
             }
           }
@@ -632,8 +843,7 @@
                 "ai",
                 "chat"
               ]
-            },
-            "description": "Currently returns a stub AI response."
+            }
           }
         }
       ]
@@ -646,7 +856,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/v1/progress/overview",
+              "raw": "{{baseUrl}}/api/v1/progress/overview?from_date=2026-05-25&to_date=2026-05-31",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -655,6 +865,16 @@
                 "v1",
                 "progress",
                 "overview"
+              ],
+              "query": [
+                {
+                  "key": "from_date",
+                  "value": "2026-05-25"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2026-05-31"
+                }
               ]
             }
           }
@@ -664,7 +884,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/v1/progress/personal-records",
+              "raw": "{{baseUrl}}/api/v1/progress/personal-records?limit=20&metric=estimated_1rm",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -673,6 +893,40 @@
                 "v1",
                 "progress",
                 "personal-records"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "metric",
+                  "value": "estimated_1rm"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Weekly Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/progress/weekly-report?week_start=2026-05-25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "progress",
+                "weekly-report"
+              ],
+              "query": [
+                {
+                  "key": "week_start",
+                  "value": "2026-05-25"
+                }
               ]
             }
           }
