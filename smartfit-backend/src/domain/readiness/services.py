@@ -14,11 +14,15 @@ class ReadinessCalculator:
         rhr = self._rhr_score(health_summary)
         self_report = self._self_report_score(manual_checkin)
 
-        score = round((sleep * 0.35) + (hrv * 0.25) + (rhr * 0.2) + (self_report * 0.2), 2)
+        score = round(
+            (sleep * 0.35) + (hrv * 0.25) + (rhr * 0.2) + (self_report * 0.2), 2
+        )
         category = self._category(score)
         recommendation = self._recommendation(score)
         confidence = self._confidence_level(health_summary, manual_checkin)
-        explanation = self._build_explanation(score, category, sleep, hrv, rhr, self_report)
+        explanation = self._build_explanation(
+            score, category, sleep, hrv, rhr, self_report
+        )
         return score, category, recommendation, confidence, explanation
 
     def _sleep_score(self, health_summary: HealthSummary | None) -> float:

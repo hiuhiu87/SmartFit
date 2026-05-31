@@ -21,8 +21,14 @@ class AIRequestModel(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column("metadata", JSONB, nullable=False),
     )
-    created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
-    updated_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 class AIChatMessageModel(SQLModel, table=True):
@@ -32,7 +38,10 @@ class AIChatMessageModel(SQLModel, table=True):
     ai_request_id: UUID = Field(foreign_key="ai_requests.id", index=True)
     role: str = Field(max_length=50)
     content: str = Field(max_length=4000)
-    created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 class AnalyticsEventModel(SQLModel, table=True):
@@ -42,4 +51,7 @@ class AnalyticsEventModel(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="users.id", index=True)
     event_name: str = Field(index=True, max_length=100)
     payload: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
-    created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )

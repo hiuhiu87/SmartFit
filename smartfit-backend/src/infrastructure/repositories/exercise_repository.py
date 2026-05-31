@@ -6,7 +6,10 @@ from sqlmodel import select
 from src.domain.exercise.entities import Exercise
 from src.domain.exercise.repositories import ExerciseRepository
 from src.infrastructure.database.mapper import exercise_model_to_domain
-from src.infrastructure.database.models.exercise_model import ExerciseAlternativeModel, ExerciseModel
+from src.infrastructure.database.models.exercise_model import (
+    ExerciseAlternativeModel,
+    ExerciseModel,
+)
 
 
 class SQLModelExerciseRepository(ExerciseRepository):
@@ -31,7 +34,9 @@ class SQLModelExerciseRepository(ExerciseRepository):
         return exercise_model_to_domain(model) if model else None
 
     async def get_alternative(self, exercise_id: UUID) -> Exercise | None:
-        statement = select(ExerciseAlternativeModel).where(ExerciseAlternativeModel.exercise_id == exercise_id)
+        statement = select(ExerciseAlternativeModel).where(
+            ExerciseAlternativeModel.exercise_id == exercise_id
+        )
         result = await self.session.execute(statement)
         alternative = result.scalar_one_or_none()
         if alternative is None:

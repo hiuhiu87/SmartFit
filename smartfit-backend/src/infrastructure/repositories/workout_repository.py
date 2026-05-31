@@ -6,8 +6,15 @@ from sqlmodel import select
 
 from src.domain.workout.entities import WorkoutLog, WorkoutPlan, WorkoutSetLog
 from src.domain.workout.repositories import WorkoutRepository
-from src.infrastructure.database.mapper import workout_plan_domain_to_model, workout_plan_model_to_domain
-from src.infrastructure.database.models.workout_model import WorkoutLogModel, WorkoutPlanModel, WorkoutSetLogModel
+from src.infrastructure.database.mapper import (
+    workout_plan_domain_to_model,
+    workout_plan_model_to_domain,
+)
+from src.infrastructure.database.models.workout_model import (
+    WorkoutLogModel,
+    WorkoutPlanModel,
+    WorkoutSetLogModel,
+)
 
 
 class SQLModelWorkoutRepository(WorkoutRepository):
@@ -35,8 +42,14 @@ class SQLModelWorkoutRepository(WorkoutRepository):
         self.session.add(model)
         return set_log
 
-    async def list_workout_history(self, user_id: UUID, limit: int = 30) -> list[WorkoutLog]:
-        statement = select(WorkoutLogModel).where(WorkoutLogModel.user_id == user_id).limit(limit)
+    async def list_workout_history(
+        self, user_id: UUID, limit: int = 30
+    ) -> list[WorkoutLog]:
+        statement = (
+            select(WorkoutLogModel)
+            .where(WorkoutLogModel.user_id == user_id)
+            .limit(limit)
+        )
         result = await self.session.execute(statement)
         models = result.scalars().all()
         return [

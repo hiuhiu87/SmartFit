@@ -5,13 +5,35 @@ from datetime import date, timedelta
 from sqlmodel import select
 
 from src.infrastructure.database.base import import_models
-from src.infrastructure.database.models.ai_model import AIChatMessageModel, AIRequestModel, AnalyticsEventModel
-from src.infrastructure.database.models.exercise_model import ExerciseAlternativeModel, ExerciseModel
-from src.infrastructure.database.models.health_model import HealthSummaryModel, ManualCheckinModel
+from src.infrastructure.database.models.ai_model import (
+    AIChatMessageModel,
+    AIRequestModel,
+    AnalyticsEventModel,
+)
+from src.infrastructure.database.models.exercise_model import (
+    ExerciseAlternativeModel,
+    ExerciseModel,
+)
+from src.infrastructure.database.models.health_model import (
+    HealthSummaryModel,
+    ManualCheckinModel,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
 from src.infrastructure.database.models.subscription_model import SubscriptionModel
-from src.infrastructure.database.models.user_model import NotificationSettingModel, UserEquipmentModel, UserModel, UserPreferenceModel, UserProfileModel
-from src.infrastructure.database.models.workout_model import WorkoutFeedbackModel, WorkoutLogModel, WorkoutPlanExerciseModel, WorkoutPlanModel, WorkoutSetLogModel
+from src.infrastructure.database.models.user_model import (
+    NotificationSettingModel,
+    UserEquipmentModel,
+    UserModel,
+    UserPreferenceModel,
+    UserProfileModel,
+)
+from src.infrastructure.database.models.workout_model import (
+    WorkoutFeedbackModel,
+    WorkoutLogModel,
+    WorkoutPlanExerciseModel,
+    WorkoutPlanModel,
+    WorkoutSetLogModel,
+)
 from src.infrastructure.database.session import SessionLocal
 from src.infrastructure.seed.seed_exercises import seed_exercises
 
@@ -152,7 +174,10 @@ async def seed_mock_data() -> dict[str, int]:
     await seed_exercises()
 
     async with SessionLocal() as session:
-        exercises = {exercise.slug: exercise for exercise in await _get_all(session, ExerciseModel)}
+        exercises = {
+            exercise.slug: exercise
+            for exercise in await _get_all(session, ExerciseModel)
+        }
         primary_exercise = exercises["dumbbell-goblet-squat"]
         alternative_exercise = exercises["push-up"]
         cardio_exercise = exercises["treadmill-zone-2-walk"]
@@ -176,7 +201,9 @@ async def seed_mock_data() -> dict[str, int]:
         today = date.today()
 
         for user_index, spec in enumerate(USER_SPECS, start=1):
-            user = await _get_one_or_none(session, UserModel, UserModel.email == spec.email)
+            user = await _get_one_or_none(
+                session, UserModel, UserModel.email == spec.email
+            )
             if user is None:
                 user = UserModel(
                     email=spec.email,
@@ -188,7 +215,9 @@ async def seed_mock_data() -> dict[str, int]:
                 await session.flush()
                 inserted["users"] += 1
 
-            profile = await _get_one_or_none(session, UserProfileModel, UserProfileModel.user_id == user.id)
+            profile = await _get_one_or_none(
+                session, UserProfileModel, UserProfileModel.user_id == user.id
+            )
             if profile is None:
                 session.add(
                     UserProfileModel(
@@ -213,10 +242,16 @@ async def seed_mock_data() -> dict[str, int]:
                     UserEquipmentModel.equipment_type == equipment_type,
                 )
                 if equipment is None:
-                    session.add(UserEquipmentModel(user_id=user.id, equipment_type=equipment_type))
+                    session.add(
+                        UserEquipmentModel(
+                            user_id=user.id, equipment_type=equipment_type
+                        )
+                    )
                     inserted["equipment"] += 1
 
-            preference = await _get_one_or_none(session, UserPreferenceModel, UserPreferenceModel.user_id == user.id)
+            preference = await _get_one_or_none(
+                session, UserPreferenceModel, UserPreferenceModel.user_id == user.id
+            )
             if preference is None:
                 session.add(
                     UserPreferenceModel(
@@ -230,7 +265,11 @@ async def seed_mock_data() -> dict[str, int]:
                 )
                 inserted["preferences"] += 1
 
-            notification_setting = await _get_one_or_none(session, NotificationSettingModel, NotificationSettingModel.user_id == user.id)
+            notification_setting = await _get_one_or_none(
+                session,
+                NotificationSettingModel,
+                NotificationSettingModel.user_id == user.id,
+            )
             if notification_setting is None:
                 session.add(
                     NotificationSettingModel(
@@ -244,7 +283,9 @@ async def seed_mock_data() -> dict[str, int]:
                 )
                 inserted["notification_settings"] += 1
 
-            subscription = await _get_one_or_none(session, SubscriptionModel, SubscriptionModel.user_id == user.id)
+            subscription = await _get_one_or_none(
+                session, SubscriptionModel, SubscriptionModel.user_id == user.id
+            )
             if subscription is None:
                 session.add(
                     SubscriptionModel(
@@ -268,12 +309,18 @@ async def seed_mock_data() -> dict[str, int]:
                         HealthSummaryModel(
                             user_id=user.id,
                             date=health_payload["date"],
-                            sleep_hours=health_payload["sleep_hours"] + user_index * 0.1,
+                            sleep_hours=health_payload["sleep_hours"]
+                            + user_index * 0.1,
                             sleep_efficiency=health_payload["sleep_efficiency"],
-                            resting_heart_rate=health_payload["resting_heart_rate"] + user_index,
-                            heart_rate_variability=max(28.0, health_payload["heart_rate_variability"] - user_index),
+                            resting_heart_rate=health_payload["resting_heart_rate"]
+                            + user_index,
+                            heart_rate_variability=max(
+                                28.0,
+                                health_payload["heart_rate_variability"] - user_index,
+                            ),
                             steps=health_payload["steps"] + user_index * 250,
-                            active_energy_kcal=health_payload["active_energy_kcal"] + user_index * 20,
+                            active_energy_kcal=health_payload["active_energy_kcal"]
+                            + user_index * 20,
                             source="healthkit",
                         )
                     )
@@ -312,7 +359,9 @@ async def seed_mock_data() -> dict[str, int]:
                         ReadinessScoreModel(
                             user_id=user.id,
                             date=readiness_payload["date"],
-                            score=max(30.0, readiness_payload["score"] - user_index * 1.5),
+                            score=max(
+                                30.0, readiness_payload["score"] - user_index * 1.5
+                            ),
                             category=readiness_payload["category"],
                             recommendation=readiness_payload["recommendation"],
                             confidence=readiness_payload["confidence"],
@@ -337,7 +386,9 @@ async def seed_mock_data() -> dict[str, int]:
                         status=("completed", "completed", "generated")[plan_index - 1],
                         source=("ai", "manual", "fallback")[plan_index - 1],
                         readiness_score=78.0 - plan_index * 6 - user_index,
-                        decision=("normal_volume", "reduced_volume", "recovery")[plan_index - 1],
+                        decision=("normal_volume", "reduced_volume", "recovery")[
+                            plan_index - 1
+                        ],
                     )
                     session.add(plan)
                     await session.flush()
@@ -345,11 +396,32 @@ async def seed_mock_data() -> dict[str, int]:
 
                 plan_exercise_specs = [
                     (1, primary_exercise.id, 4, "8-10", 7, "Primary movement"),
-                    (2, alternative_exercise.id, 3, "10-15", 6, "Accessory push movement"),
-                    (3, cardio_exercise.id, 1, "20 min", 5, "Finish with low-intensity cardio"),
+                    (
+                        2,
+                        alternative_exercise.id,
+                        3,
+                        "10-15",
+                        6,
+                        "Accessory push movement",
+                    ),
+                    (
+                        3,
+                        cardio_exercise.id,
+                        1,
+                        "20 min",
+                        5,
+                        "Finish with low-intensity cardio",
+                    ),
                 ]
                 plan_exercise_ids = []
-                for order_index, exercise_id, target_sets, target_reps, target_rpe, notes in plan_exercise_specs:
+                for (
+                    order_index,
+                    exercise_id,
+                    target_sets,
+                    target_reps,
+                    target_rpe,
+                    notes,
+                ) in plan_exercise_specs:
                     plan_exercise = await _get_one_or_none(
                         session,
                         WorkoutPlanExerciseModel,
@@ -397,7 +469,13 @@ async def seed_mock_data() -> dict[str, int]:
                     (plan_exercise_ids[1], 1, 14, None, 6),
                     (plan_exercise_ids[1], 2, 12, None, 7),
                 ]
-                for plan_exercise_id, set_number, reps_completed, weight_kg, rpe in set_specs:
+                for (
+                    plan_exercise_id,
+                    set_number,
+                    reps_completed,
+                    weight_kg,
+                    rpe,
+                ) in set_specs:
                     set_log = await _get_one_or_none(
                         session,
                         WorkoutSetLogModel,
@@ -418,12 +496,18 @@ async def seed_mock_data() -> dict[str, int]:
                         )
                         inserted["workout_set_logs"] += 1
 
-                feedback = await _get_one_or_none(session, WorkoutFeedbackModel, WorkoutFeedbackModel.workout_log_id == workout_log.id)
+                feedback = await _get_one_or_none(
+                    session,
+                    WorkoutFeedbackModel,
+                    WorkoutFeedbackModel.workout_log_id == workout_log.id,
+                )
                 if feedback is None:
                     session.add(
                         WorkoutFeedbackModel(
                             workout_log_id=workout_log.id,
-                            difficulty_feedback=("just_right", "too_easy", "too_hard")[user_index % 3],
+                            difficulty_feedback=("just_right", "too_easy", "too_hard")[
+                                user_index % 3
+                            ],
                             enjoyment_score=7 + (plan_index % 3),
                             comments=f"Mock feedback for workout plan {plan_title}.",
                         )
@@ -431,11 +515,28 @@ async def seed_mock_data() -> dict[str, int]:
                     inserted["workout_feedback"] += 1
 
             ai_request_specs = [
-                ("generate_workout", "success", f"Generate workout for {spec.primary_goal}", "Generated workout plan."),
-                ("replace_exercise", "fallback_used", f"Replace exercise for {spec.email}", "Suggested fallback exercise."),
-                ("chat", "success", f"How should I recover after session for {spec.email}?", "Prioritize sleep, hydration, and light mobility."),
+                (
+                    "generate_workout",
+                    "success",
+                    f"Generate workout for {spec.primary_goal}",
+                    "Generated workout plan.",
+                ),
+                (
+                    "replace_exercise",
+                    "fallback_used",
+                    f"Replace exercise for {spec.email}",
+                    "Suggested fallback exercise.",
+                ),
+                (
+                    "chat",
+                    "success",
+                    f"How should I recover after session for {spec.email}?",
+                    "Prioritize sleep, hydration, and light mobility.",
+                ),
             ]
-            for request_index, (request_type, status, prompt, response) in enumerate(ai_request_specs, start=1):
+            for request_index, (request_type, status, prompt, response) in enumerate(
+                ai_request_specs, start=1
+            ):
                 ai_request = await _get_one_or_none(
                     session,
                     AIRequestModel,
@@ -449,7 +550,11 @@ async def seed_mock_data() -> dict[str, int]:
                         status=status,
                         prompt=prompt,
                         response=response,
-                        request_metadata={"seed": True, "request_index": request_index, "user_index": user_index},
+                        request_metadata={
+                            "seed": True,
+                            "request_index": request_index,
+                            "user_index": user_index,
+                        },
                     )
                     session.add(ai_request)
                     await session.flush()
@@ -476,7 +581,10 @@ async def seed_mock_data() -> dict[str, int]:
                         inserted["ai_chat_messages"] += 1
 
             for event_name, payload in (
-                ("mock_seed_completed", {"email": spec.email, "user_index": user_index}),
+                (
+                    "mock_seed_completed",
+                    {"email": spec.email, "user_index": user_index},
+                ),
                 ("workout_generated", {"email": spec.email, "goal": spec.primary_goal}),
                 ("readiness_checked", {"email": spec.email, "days_seeded": 7}),
             ):

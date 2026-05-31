@@ -20,8 +20,14 @@ class WorkoutPlanModel(SQLModel, table=True):
     source: str = Field(index=True, max_length=50)
     readiness_score: float | None = Field(default=None)
     decision: str | None = Field(default=None, max_length=50)
-    created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
-    updated_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 class WorkoutPlanExerciseModel(SQLModel, table=True):
@@ -43,12 +49,22 @@ class WorkoutLogModel(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     workout_plan_id: UUID = Field(foreign_key="workout_plans.id", index=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
-    started_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-    completed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    started_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    completed_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     duration_minutes: int | None = Field(default=None)
     notes: str | None = Field(default=None, max_length=2000)
-    created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
-    updated_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 class WorkoutSetLogModel(SQLModel, table=True):
@@ -56,12 +72,17 @@ class WorkoutSetLogModel(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     workout_log_id: UUID = Field(foreign_key="workout_logs.id", index=True)
-    workout_plan_exercise_id: UUID = Field(foreign_key="workout_plan_exercises.id", index=True)
+    workout_plan_exercise_id: UUID = Field(
+        foreign_key="workout_plan_exercises.id", index=True
+    )
     set_number: int = Field(nullable=False)
     reps_completed: int = Field(nullable=False)
     weight_kg: float | None = Field(default=None)
     rpe: int | None = Field(default=None)
-    created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 class WorkoutFeedbackModel(SQLModel, table=True):
@@ -72,4 +93,7 @@ class WorkoutFeedbackModel(SQLModel, table=True):
     difficulty_feedback: str = Field(max_length=50)
     enjoyment_score: int | None = Field(default=None)
     comments: str | None = Field(default=None, max_length=1000)
-    created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )

@@ -22,5 +22,7 @@ class WorkoutRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_workout_history(self, user_id: UUID, limit: int = 30) -> list[WorkoutLog]:
+    async def list_workout_history(
+        self, user_id: UUID, limit: int = 30
+    ) -> list[WorkoutLog]:
         raise NotImplementedError

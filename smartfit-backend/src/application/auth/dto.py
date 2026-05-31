@@ -13,3 +13,4 @@ class AuthTokenDTO:
 class AuthenticatedUserDTO:
     id: UUID
     email: str
+    is_active: bool = True

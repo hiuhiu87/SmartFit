@@ -82,4 +82,6 @@ def test_workout_safety_policy_blocks_normal_workout_when_readiness_very_low() -
     except ValidationError as exc:
         assert "recovery or rest_day" in str(exc)
     else:
-        raise AssertionError("Expected ValidationError for unsafe very-low-readiness workout")
+        raise AssertionError(
+            "Expected ValidationError for unsafe very-low-readiness workout"
+        )

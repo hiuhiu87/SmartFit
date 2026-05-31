@@ -1,11 +1,24 @@
-from src.domain.common.enums import AuthProvider, EquipmentType, Goal, MuscleGroup, ReadinessCategory, ReadinessRecommendation, TrainingLevel, WorkoutSource, WorkoutStatus
+from src.domain.common.enums import (
+    AuthProvider,
+    EquipmentType,
+    Goal,
+    MuscleGroup,
+    ReadinessCategory,
+    ReadinessRecommendation,
+    TrainingLevel,
+    WorkoutSource,
+    WorkoutStatus,
+)
 from src.domain.exercise.entities import Exercise
 from src.domain.health.entities import HealthSummary, ManualCheckin
 from src.domain.readiness.entities import ReadinessScore
 from src.domain.user.entities import User, UserProfile
 from src.domain.workout.entities import WorkoutPlan
 from src.infrastructure.database.models.exercise_model import ExerciseModel
-from src.infrastructure.database.models.health_model import HealthSummaryModel, ManualCheckinModel
+from src.infrastructure.database.models.health_model import (
+    HealthSummaryModel,
+    ManualCheckinModel,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
 from src.infrastructure.database.models.user_model import UserModel, UserProfileModel
 from src.infrastructure.database.models.workout_model import WorkoutPlanModel

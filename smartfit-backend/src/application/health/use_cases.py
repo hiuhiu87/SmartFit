@@ -1,4 +1,7 @@
-from src.application.health.commands import SaveHealthSummaryCommand, SaveManualCheckinCommand
+from src.application.health.commands import (
+    SaveHealthSummaryCommand,
+    SaveManualCheckinCommand,
+)
 from src.application.health.dto import HealthSummaryDTO, ManualCheckinDTO
 
 

@@ -1,7 +1,7 @@
 """Init Schemas
 
 Revision ID: 24c8f2d55960
-Revises: 
+Revises:
 Create Date: 2026-05-31 16:20:36.831032
 """
 
@@ -9,9 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 import sqlmodel  # noqa: F401
 
-
-
-revision = '24c8f2d55960'
+revision = "24c8f2d55960"
 down_revision = None
 branch_labels = None
 depends_on = None

@@ -11,6 +11,10 @@ class LoginRequestSchema(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class RefreshTokenRequestSchema(BaseModel):
+    refresh_token: str = Field(min_length=1)
+
+
 class TokenResponseSchema(BaseModel):
     access_token: str
     refresh_token: str

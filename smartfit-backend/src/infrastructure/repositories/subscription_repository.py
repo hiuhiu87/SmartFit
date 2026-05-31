@@ -14,7 +14,9 @@ class SQLModelSubscriptionRepository(SubscriptionRepository):
         self.session = session
 
     async def get_by_user_id(self, user_id: UUID) -> Subscription | None:
-        statement = select(SubscriptionModel).where(SubscriptionModel.user_id == user_id)
+        statement = select(SubscriptionModel).where(
+            SubscriptionModel.user_id == user_id
+        )
         result = await self.session.execute(statement)
         model = result.scalar_one_or_none()
         if model is None:

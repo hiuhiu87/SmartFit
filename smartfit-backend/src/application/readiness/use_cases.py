@@ -15,9 +15,11 @@ class CalculateReadinessUseCase:
         health_summary: HealthSummary | None = None,
         manual_checkin: ManualCheckin | None = None,
     ) -> ReadinessDTO:
-        score, category, recommendation, confidence, explanation = self.calculator.calculate(
-            health_summary=health_summary,
-            manual_checkin=manual_checkin,
+        score, category, recommendation, confidence, explanation = (
+            self.calculator.calculate(
+                health_summary=health_summary,
+                manual_checkin=manual_checkin,
+            )
         )
         return ReadinessDTO(
             date=command.date,

@@ -11,3 +11,8 @@ class RegisterUserCommand:
 class LoginCommand:
     email: str
     password: str
+
+
+@dataclass(slots=True)
+class RefreshTokenCommand:
+    refresh_token: str

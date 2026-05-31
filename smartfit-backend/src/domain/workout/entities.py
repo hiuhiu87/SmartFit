@@ -2,7 +2,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from src.domain.common.enums import DifficultyFeedback, MuscleGroup, WorkoutSource, WorkoutStatus
+from src.domain.common.enums import (
+    DifficultyFeedback,
+    MuscleGroup,
+    WorkoutSource,
+    WorkoutStatus,
+)
 
 
 @dataclass(slots=True)

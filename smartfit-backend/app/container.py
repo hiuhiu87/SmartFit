@@ -1,32 +1,77 @@
-from src.application.auth.use_cases import LoginUseCase, RegisterUserUseCase
-from src.application.health.use_cases import SaveHealthSummaryUseCase, SaveManualCheckinUseCase
-from src.application.progress.use_cases import GetPersonalRecordsUseCase, GetProgressOverviewUseCase
-from src.application.readiness.use_cases import CalculateReadinessUseCase, GetReadinessHistoryUseCase, GetTodayReadinessUseCase
-from src.application.user.use_cases import GetCurrentUserUseCase, UpdateEquipmentUseCase, UpdateProfileUseCase
-from src.application.workout.use_cases import CompleteWorkoutUseCase, GenerateWorkoutUseCase, GetWorkoutDetailUseCase, GetWorkoutHistoryUseCase, LogWorkoutSetUseCase, StartWorkoutUseCase
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.application.auth.use_cases import (
+    LoginUseCase,
+    RefreshTokenUseCase,
+    RegisterUserUseCase,
+)
+from src.application.health.use_cases import (
+    SaveHealthSummaryUseCase,
+    SaveManualCheckinUseCase,
+)
+from src.application.progress.use_cases import (
+    GetPersonalRecordsUseCase,
+    GetProgressOverviewUseCase,
+)
+from src.application.readiness.use_cases import (
+    CalculateReadinessUseCase,
+    GetReadinessHistoryUseCase,
+    GetTodayReadinessUseCase,
+)
+from src.application.user.use_cases import (
+    GetCurrentUserProfileUseCase,
+    UpdateUserEquipmentUseCase,
+    UpdateUserProfileUseCase,
+)
+from src.application.workout.use_cases import (
+    CompleteWorkoutUseCase,
+    GenerateWorkoutUseCase,
+    GetWorkoutDetailUseCase,
+    GetWorkoutHistoryUseCase,
+    LogWorkoutSetUseCase,
+    StartWorkoutUseCase,
+)
 from src.domain.readiness.services import ReadinessCalculator
 from src.infrastructure.ai.ai_client import AIClient
+from src.infrastructure.repositories.user_repository import SQLModelUserRepository
+from src.infrastructure.security.jwt_provider import JWTProvider
+from src.infrastructure.security.password_hasher import PasswordHasher
 
 
 class Container:
     def __init__(self) -> None:
         self.readiness_calculator = ReadinessCalculator()
         self.ai_client = AIClient()
+        self.password_hasher = PasswordHasher()
+        self.jwt_provider = JWTProvider()
 
-    def register_user_use_case(self) -> RegisterUserUseCase:
-        return RegisterUserUseCase()
+    def register_user_use_case(self, session: AsyncSession) -> RegisterUserUseCase:
+        return RegisterUserUseCase(
+            SQLModelUserRepository(session), self.password_hasher
+        )
 
-    def login_use_case(self) -> LoginUseCase:
-        return LoginUseCase()
+    def login_use_case(self, session: AsyncSession) -> LoginUseCase:
+        return LoginUseCase(
+            SQLModelUserRepository(session), self.password_hasher, self.jwt_provider
+        )
 
-    def get_current_user_use_case(self) -> GetCurrentUserUseCase:
-        return GetCurrentUserUseCase()
+    def refresh_token_use_case(self, session: AsyncSession) -> RefreshTokenUseCase:
+        return RefreshTokenUseCase(SQLModelUserRepository(session), self.jwt_provider)
 
-    def update_profile_use_case(self) -> UpdateProfileUseCase:
-        return UpdateProfileUseCase()
+    def get_current_user_use_case(
+        self, session: AsyncSession
+    ) -> GetCurrentUserProfileUseCase:
+        return GetCurrentUserProfileUseCase(SQLModelUserRepository(session))
 
-    def update_equipment_use_case(self) -> UpdateEquipmentUseCase:
-        return UpdateEquipmentUseCase()
+    def update_profile_use_case(
+        self, session: AsyncSession
+    ) -> UpdateUserProfileUseCase:
+        return UpdateUserProfileUseCase(SQLModelUserRepository(session))
+
+    def update_equipment_use_case(
+        self, session: AsyncSession
+    ) -> UpdateUserEquipmentUseCase:
+        return UpdateUserEquipmentUseCase(SQLModelUserRepository(session))
 
     def save_health_summary_use_case(self) -> SaveHealthSummaryUseCase:
         return SaveHealthSummaryUseCase()

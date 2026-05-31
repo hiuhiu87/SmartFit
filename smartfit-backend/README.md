@@ -211,6 +211,24 @@ This will create a mock user and related records for:
 - subscription
 - analytics event
 
+### 9. Postman Collection
+
+Import the Postman collection at [postman/SmartFit-Backend.postman_collection.json](/Users/hieunm37/Workspace/Project/smartfit/smartfit-backend/postman/SmartFit-Backend.postman_collection.json:1).
+
+Suggested order:
+
+1. `Auth / Register`
+2. `Auth / Login`
+3. `Users / Update Profile`
+4. `Users / Update Equipment`
+5. `Users / Get Me`
+
+Notes:
+
+- collection variables `accessToken` and `refreshToken` are filled automatically after `Login` and `Refresh Token`
+- default `baseUrl` is `http://127.0.0.1:8000`
+- some requests are included for completeness but still hit stub or TODO endpoints
+
 ## Verification
 
 Local skeleton check completed with:

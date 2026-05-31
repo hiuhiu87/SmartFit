@@ -1,7 +1,13 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from src.domain.user.entities import NotificationSetting, User, UserEquipment, UserPreference, UserProfile
+from src.domain.user.entities import (
+    NotificationSetting,
+    User,
+    UserEquipment,
+    UserPreference,
+    UserProfile,
+)
 
 
 class UserRepository(ABC):
@@ -14,7 +20,19 @@ class UserRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def create(self, user: User) -> User:
+        raise NotImplementedError
+
+    @abstractmethod
     async def save(self, user: User) -> User:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_profile(self, user_id: UUID) -> UserProfile | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_equipment(self, user_id: UUID) -> list[UserEquipment]:
         raise NotImplementedError
 
     @abstractmethod
@@ -22,7 +40,9 @@ class UserRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def replace_equipment(self, user_id: UUID, equipment: list[UserEquipment]) -> list[UserEquipment]:
+    async def replace_equipment(
+        self, user_id: UUID, equipment: list[UserEquipment]
+    ) -> list[UserEquipment]:
         raise NotImplementedError
 
     @abstractmethod
@@ -30,5 +50,7 @@ class UserRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def save_notification_setting(self, setting: NotificationSetting) -> NotificationSetting:
+    async def save_notification_setting(
+        self, setting: NotificationSetting
+    ) -> NotificationSetting:
         raise NotImplementedError

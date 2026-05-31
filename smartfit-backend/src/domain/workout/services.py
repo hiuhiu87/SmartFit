@@ -7,8 +7,13 @@ class WorkoutSafetyPolicy:
     def validate(self, plan: WorkoutPlan, readiness_score: float) -> None:
         decision = plan.decision or ""
 
-        if readiness_score < 20 and decision not in {WorkoutDecision.RECOVERY.value, WorkoutDecision.REST_DAY.value}:
-            raise ValidationError("Very low readiness only allows recovery or rest_day plans")
+        if readiness_score < 20 and decision not in {
+            WorkoutDecision.RECOVERY.value,
+            WorkoutDecision.REST_DAY.value,
+        }:
+            raise ValidationError(
+                "Very low readiness only allows recovery or rest_day plans"
+            )
 
         for exercise in plan.exercises:
             if exercise.target_sets > 5:

@@ -13,6 +13,10 @@ async def list_exercises() -> APIResponseSchema[list[dict]]:
 
 
 @router.post("/replace", response_model=APIResponseSchema[dict])
-async def replace_exercise(payload: ReplaceExerciseRequestSchema) -> APIResponseSchema[dict]:
+async def replace_exercise(
+    payload: ReplaceExerciseRequestSchema,
+) -> APIResponseSchema[dict]:
     # TODO: call exercise replacement use case when implemented.
-    return APIResponseSchema(data={"exercise_id": payload.exercise_id, "replacement": None})
+    return APIResponseSchema(
+        data={"exercise_id": payload.exercise_id, "replacement": None}
+    )

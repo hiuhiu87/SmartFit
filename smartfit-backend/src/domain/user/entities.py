@@ -3,7 +3,13 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from src.domain.common.enums import AuthProvider, EquipmentType, Goal, TrainingLevel, WorkoutStyle
+from src.domain.common.enums import (
+    AuthProvider,
+    EquipmentType,
+    Goal,
+    TrainingLevel,
+    WorkoutStyle,
+)
 
 
 @dataclass(slots=True)

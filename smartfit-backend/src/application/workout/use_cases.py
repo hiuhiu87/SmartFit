@@ -1,13 +1,22 @@
 from uuid import uuid4
 
-from src.application.workout.commands import CompleteWorkoutCommand, GenerateWorkoutCommand, LogSetCommand, StartWorkoutCommand
+from src.application.workout.commands import (
+    CompleteWorkoutCommand,
+    GenerateWorkoutCommand,
+    LogSetCommand,
+    StartWorkoutCommand,
+)
 from src.application.workout.dto import WorkoutPlanDTO
 
 
 class GenerateWorkoutUseCase:
     async def execute(self, command: GenerateWorkoutCommand) -> WorkoutPlanDTO:
         # TODO: integrate readiness, AI generation, repository persistence, and safety policy.
-        return WorkoutPlanDTO(workout_id=uuid4(), title=f"{command.focus.value.title()} Session", status="generated")
+        return WorkoutPlanDTO(
+            workout_id=uuid4(),
+            title=f"{command.focus.value.title()} Session",
+            status="generated",
+        )
 
 
 class GetWorkoutDetailUseCase:
@@ -18,7 +27,9 @@ class GetWorkoutDetailUseCase:
 class StartWorkoutUseCase:
     async def execute(self, command: StartWorkoutCommand) -> WorkoutPlanDTO:
         # TODO: mark workout as started and create workout log.
-        return WorkoutPlanDTO(workout_id=command.workout_id, title="Workout", status="started")
+        return WorkoutPlanDTO(
+            workout_id=command.workout_id, title="Workout", status="started"
+        )
 
 
 class LogWorkoutSetUseCase:

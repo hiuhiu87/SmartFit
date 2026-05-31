@@ -11,9 +11,13 @@ class ReadinessRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_by_date(self, user_id: UUID, target_date: date) -> ReadinessScore | None:
+    async def get_by_date(
+        self, user_id: UUID, target_date: date
+    ) -> ReadinessScore | None:
         raise NotImplementedError
 
     @abstractmethod
-    async def list_history(self, user_id: UUID, limit: int = 30) -> list[ReadinessScore]:
+    async def list_history(
+        self, user_id: UUID, limit: int = 30
+    ) -> list[ReadinessScore]:
         raise NotImplementedError

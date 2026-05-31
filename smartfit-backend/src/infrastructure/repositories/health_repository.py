@@ -6,8 +6,16 @@ from sqlmodel import select
 
 from src.domain.health.entities import HealthSummary, ManualCheckin
 from src.domain.health.repositories import HealthRepository
-from src.infrastructure.database.mapper import health_summary_domain_to_model, health_summary_model_to_domain, manual_checkin_domain_to_model, manual_checkin_model_to_domain
-from src.infrastructure.database.models.health_model import HealthSummaryModel, ManualCheckinModel
+from src.infrastructure.database.mapper import (
+    health_summary_domain_to_model,
+    health_summary_model_to_domain,
+    manual_checkin_domain_to_model,
+    manual_checkin_model_to_domain,
+)
+from src.infrastructure.database.models.health_model import (
+    HealthSummaryModel,
+    ManualCheckinModel,
+)
 
 
 class SQLModelHealthRepository(HealthRepository):
@@ -24,7 +32,9 @@ class SQLModelHealthRepository(HealthRepository):
         self.session.add(model)
         return checkin
 
-    async def get_summary_by_date(self, user_id: UUID, target_date: date) -> HealthSummary | None:
+    async def get_summary_by_date(
+        self, user_id: UUID, target_date: date
+    ) -> HealthSummary | None:
         statement = select(HealthSummaryModel).where(
             HealthSummaryModel.user_id == user_id,
             HealthSummaryModel.date == target_date,
@@ -33,7 +43,9 @@ class SQLModelHealthRepository(HealthRepository):
         model = result.scalar_one_or_none()
         return health_summary_model_to_domain(model) if model else None
 
-    async def get_manual_checkin_by_date(self, user_id: UUID, target_date: date) -> ManualCheckin | None:
+    async def get_manual_checkin_by_date(
+        self, user_id: UUID, target_date: date
+    ) -> ManualCheckin | None:
         statement = select(ManualCheckinModel).where(
             ManualCheckinModel.user_id == user_id,
             ManualCheckinModel.date == target_date,

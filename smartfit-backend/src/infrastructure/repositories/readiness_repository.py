@@ -6,7 +6,10 @@ from sqlmodel import select
 
 from src.domain.readiness.entities import ReadinessScore
 from src.domain.readiness.repositories import ReadinessRepository
-from src.infrastructure.database.mapper import readiness_score_domain_to_model, readiness_score_model_to_domain
+from src.infrastructure.database.mapper import (
+    readiness_score_domain_to_model,
+    readiness_score_model_to_domain,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
 
 
@@ -19,7 +22,9 @@ class SQLModelReadinessRepository(ReadinessRepository):
         self.session.add(model)
         return readiness_score
 
-    async def get_by_date(self, user_id: UUID, target_date: date) -> ReadinessScore | None:
+    async def get_by_date(
+        self, user_id: UUID, target_date: date
+    ) -> ReadinessScore | None:
         statement = select(ReadinessScoreModel).where(
             ReadinessScoreModel.user_id == user_id,
             ReadinessScoreModel.date == target_date,
@@ -28,7 +33,15 @@ class SQLModelReadinessRepository(ReadinessRepository):
         model = result.scalar_one_or_none()
         return readiness_score_model_to_domain(model) if model else None
 
-    async def list_history(self, user_id: UUID, limit: int = 30) -> list[ReadinessScore]:
-        statement = select(ReadinessScoreModel).where(ReadinessScoreModel.user_id == user_id).limit(limit)
+    async def list_history(
+        self, user_id: UUID, limit: int = 30
+    ) -> list[ReadinessScore]:
+        statement = (
+            select(ReadinessScoreModel)
+            .where(ReadinessScoreModel.user_id == user_id)
+            .limit(limit)
+        )
         result = await self.session.execute(statement)
-        return [readiness_score_model_to_domain(model) for model in result.scalars().all()]
+        return [
+            readiness_score_model_to_domain(model) for model in result.scalars().all()
+        ]
