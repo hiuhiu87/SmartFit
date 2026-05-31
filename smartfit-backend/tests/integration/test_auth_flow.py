@@ -7,6 +7,11 @@ from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.main import create_app
+from src.infrastructure.database.models.health_model import (
+    HealthSummaryModel,
+    ManualCheckinModel,
+)
+from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
 from src.infrastructure.database.models.user_model import (
     UserEquipmentModel,
     UserModel,
@@ -33,6 +38,9 @@ async def test_app(tmp_path: Path):
                     UserModel.__table__,
                     UserProfileModel.__table__,
                     UserEquipmentModel.__table__,
+                    HealthSummaryModel.__table__,
+                    ManualCheckinModel.__table__,
+                    ReadinessScoreModel.__table__,
                 ],
             )
         )
@@ -353,3 +361,418 @@ async def test_internal_server_error_is_handled(error_test_app) -> None:
     payload = response.json()
     assert payload["success"] is False
     assert payload["error"]["code"] == "internal_server_error"
+
+
+@pytest.mark.asyncio
+async def test_save_health_summary(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "health.user@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "health.user@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        response = await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "sleep_hours": 7.5,
+                "sleep_efficiency": 89,
+                "resting_heart_rate": 56,
+                "heart_rate_variability": 62,
+                "steps": 9100,
+                "active_energy_kcal": 520,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["date"] == "2026-05-31"
+    assert payload["sleep_hours"] == 7.5
+    assert payload["steps"] == 9100
+
+
+@pytest.mark.asyncio
+async def test_update_same_date_health_summary(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "health.update@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "health.update@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "sleep_hours": 6.5,
+                "sleep_efficiency": 82,
+                "resting_heart_rate": 60,
+                "heart_rate_variability": 50,
+                "steps": 7000,
+                "active_energy_kcal": 430,
+            },
+        )
+        response = await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "sleep_hours": 8.0,
+                "sleep_efficiency": 91,
+                "resting_heart_rate": 54,
+                "heart_rate_variability": 68,
+                "steps": 11000,
+                "active_energy_kcal": 610,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["sleep_hours"] == 8.0
+    assert payload["resting_heart_rate"] == 54
+    assert payload["steps"] == 11000
+
+
+@pytest.mark.asyncio
+async def test_save_manual_checkin(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "checkin.user@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "checkin.user@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        response = await client.post(
+            "/api/v1/health/manual-checkin",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "energy": 4,
+                "soreness": 2,
+                "stress": 2,
+                "motivation": 5,
+                "sleep_quality": 4,
+                "notes": "Feeling good",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["energy"] == 4
+    assert payload["notes"] == "Feeling good"
+
+
+@pytest.mark.asyncio
+async def test_update_same_date_manual_checkin(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "checkin.update@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "checkin.update@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        await client.post(
+            "/api/v1/health/manual-checkin",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "energy": 2,
+                "soreness": 4,
+                "stress": 3,
+                "motivation": 2,
+                "sleep_quality": 2,
+                "notes": "Tired",
+            },
+        )
+        response = await client.post(
+            "/api/v1/health/manual-checkin",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "energy": 5,
+                "soreness": 1,
+                "stress": 1,
+                "motivation": 5,
+                "sleep_quality": 5,
+                "notes": "Recovered",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["energy"] == 5
+    assert payload["soreness"] == 1
+    assert payload["notes"] == "Recovered"
+
+
+@pytest.mark.asyncio
+async def test_latest_health_summary_returns_newest_record(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "health.latest@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "health.latest@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"date": "2026-05-30", "sleep_hours": 6.5, "steps": 8000},
+        )
+        await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"date": "2026-05-31", "sleep_hours": 7.9, "steps": 10500},
+        )
+        response = await client.get(
+            "/api/v1/health/latest-summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["date"] == "2026-05-31"
+    assert payload["sleep_hours"] == 7.9
+    assert payload["steps"] == 10500
+
+
+@pytest.mark.asyncio
+async def test_calculate_readiness_from_health_summary(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "readiness.summary@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "readiness.summary@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"date": "2026-05-30", "resting_heart_rate": 58, "heart_rate_variability": 55},
+        )
+        await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"date": "2026-05-29", "resting_heart_rate": 57, "heart_rate_variability": 57},
+        )
+        await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "sleep_hours": 8.1,
+                "resting_heart_rate": 55,
+                "heart_rate_variability": 64,
+                "steps": 9800,
+            },
+        )
+        response = await client.post(
+            "/api/v1/readiness/calculate",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"date": "2026-05-31"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["date"] == "2026-05-31"
+    assert payload["score"] > 0
+    assert payload["confidence"] > 0
+
+
+@pytest.mark.asyncio
+async def test_calculate_readiness_from_manual_checkin(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "readiness.checkin@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "readiness.checkin@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        await client.post(
+            "/api/v1/health/manual-checkin",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "energy": 5,
+                "soreness": 1,
+                "stress": 1,
+                "motivation": 5,
+                "sleep_quality": 5,
+                "notes": "Ready to go",
+            },
+        )
+        response = await client.post(
+            "/api/v1/readiness/calculate",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"date": "2026-05-31"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["score"] > 0
+    assert payload["category"] in {
+        "excellent",
+        "good",
+        "moderate",
+        "low",
+        "very_low",
+    }
+
+
+@pytest.mark.asyncio
+async def test_calculate_readiness_with_missing_hrv_still_succeeds(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "readiness.nohrv@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "readiness.nohrv@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        await client.post(
+            "/api/v1/health/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "sleep_hours": 7.2,
+                "resting_heart_rate": 59,
+                "steps": 8600,
+            },
+        )
+        response = await client.post(
+            "/api/v1/readiness/calculate",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"date": "2026-05-31"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["score"] > 0
+    assert payload["confidence"] > 0
+
+
+@pytest.mark.asyncio
+async def test_today_returns_existing_readiness(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "readiness.today@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "readiness.today@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        await client.post(
+            "/api/v1/health/manual-checkin",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "energy": 4,
+                "soreness": 2,
+                "stress": 2,
+                "motivation": 4,
+                "sleep_quality": 4,
+            },
+        )
+        calculate_response = await client.post(
+            "/api/v1/readiness/calculate",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"date": "2026-05-31"},
+        )
+        response = await client.get(
+            "/api/v1/readiness/today",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert calculate_response.status_code == 200
+    assert response.status_code == 200
+    assert response.json()["data"]["date"] == calculate_response.json()["data"]["date"]
+    assert response.json()["data"]["score"] == calculate_response.json()["data"]["score"]
+
+
+@pytest.mark.asyncio
+async def test_history_returns_multiple_records(test_app) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://testserver"
+    ) as client:
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "readiness.history@example.com", "password": "password123"},
+        )
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "readiness.history@example.com", "password": "password123"},
+        )
+        access_token = login_response.json()["data"]["access_token"]
+        for target_date, energy in [("2026-05-30", 3), ("2026-05-31", 5)]:
+            await client.post(
+                "/api/v1/health/manual-checkin",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={
+                    "date": target_date,
+                    "energy": energy,
+                    "soreness": 2,
+                    "stress": 2,
+                    "motivation": 4,
+                    "sleep_quality": 4,
+                },
+            )
+            await client.post(
+                "/api/v1/readiness/calculate",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"date": target_date},
+            )
+        response = await client.get(
+            "/api/v1/readiness/history",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert len(payload) >= 2
+    assert payload[0]["date"] >= payload[1]["date"]

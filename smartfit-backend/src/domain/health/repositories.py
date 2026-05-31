@@ -21,6 +21,16 @@ class HealthRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_latest_summary(self, user_id: UUID) -> HealthSummary | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_recent_summaries(
+        self, user_id: UUID, before_date: date, limit: int
+    ) -> list[HealthSummary]:
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_manual_checkin_by_date(
         self, user_id: UUID, target_date: date
     ) -> ManualCheckin | None:

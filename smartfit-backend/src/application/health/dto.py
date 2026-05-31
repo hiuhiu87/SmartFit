@@ -6,8 +6,12 @@ from datetime import date as date_type
 class HealthSummaryDTO:
     date: date_type
     sleep_hours: float | None = None
+    sleep_efficiency: float | None = None
     resting_heart_rate: float | None = None
     heart_rate_variability: float | None = None
+    steps: int | None = None
+    active_energy_kcal: float | None = None
+    source: str = "healthkit"
 
 
 @dataclass(slots=True)
@@ -18,3 +22,4 @@ class ManualCheckinDTO:
     stress: int
     motivation: int
     sleep_quality: int
+    notes: str | None = None

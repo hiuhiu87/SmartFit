@@ -6,6 +6,7 @@ from src.application.auth.use_cases import (
     RegisterUserUseCase,
 )
 from src.application.health.use_cases import (
+    GetLatestHealthSummaryUseCase,
     SaveHealthSummaryUseCase,
     SaveManualCheckinUseCase,
 )
@@ -33,6 +34,8 @@ from src.application.workout.use_cases import (
 )
 from src.domain.readiness.services import ReadinessCalculator
 from src.infrastructure.ai.ai_client import AIClient
+from src.infrastructure.repositories.health_repository import SQLModelHealthRepository
+from src.infrastructure.repositories.readiness_repository import SQLModelReadinessRepository
 from src.infrastructure.repositories.user_repository import SQLModelUserRepository
 from src.infrastructure.security.jwt_provider import JWTProvider
 from src.infrastructure.security.password_hasher import PasswordHasher
@@ -73,20 +76,44 @@ class Container:
     ) -> UpdateUserEquipmentUseCase:
         return UpdateUserEquipmentUseCase(SQLModelUserRepository(session))
 
-    def save_health_summary_use_case(self) -> SaveHealthSummaryUseCase:
-        return SaveHealthSummaryUseCase()
+    def save_health_summary_use_case(
+        self, session: AsyncSession
+    ) -> SaveHealthSummaryUseCase:
+        return SaveHealthSummaryUseCase(SQLModelHealthRepository(session))
 
-    def save_manual_checkin_use_case(self) -> SaveManualCheckinUseCase:
-        return SaveManualCheckinUseCase()
+    def save_manual_checkin_use_case(
+        self, session: AsyncSession
+    ) -> SaveManualCheckinUseCase:
+        return SaveManualCheckinUseCase(SQLModelHealthRepository(session))
 
-    def calculate_readiness_use_case(self) -> CalculateReadinessUseCase:
-        return CalculateReadinessUseCase(self.readiness_calculator)
+    def get_latest_health_summary_use_case(
+        self, session: AsyncSession
+    ) -> GetLatestHealthSummaryUseCase:
+        return GetLatestHealthSummaryUseCase(SQLModelHealthRepository(session))
 
-    def get_today_readiness_use_case(self) -> GetTodayReadinessUseCase:
-        return GetTodayReadinessUseCase()
+    def calculate_readiness_use_case(
+        self, session: AsyncSession
+    ) -> CalculateReadinessUseCase:
+        return CalculateReadinessUseCase(
+            SQLModelReadinessRepository(session),
+            SQLModelHealthRepository(session),
+            self.readiness_calculator,
+        )
 
-    def get_readiness_history_use_case(self) -> GetReadinessHistoryUseCase:
-        return GetReadinessHistoryUseCase()
+    def get_today_readiness_use_case(
+        self, session: AsyncSession
+    ) -> GetTodayReadinessUseCase:
+        calculate_use_case = self.calculate_readiness_use_case(session)
+        return GetTodayReadinessUseCase(
+            SQLModelReadinessRepository(session),
+            calculate_use_case,
+            SQLModelHealthRepository(session),
+        )
+
+    def get_readiness_history_use_case(
+        self, session: AsyncSession
+    ) -> GetReadinessHistoryUseCase:
+        return GetReadinessHistoryUseCase(SQLModelReadinessRepository(session))
 
     def generate_workout_use_case(self) -> GenerateWorkoutUseCase:
         return GenerateWorkoutUseCase()
