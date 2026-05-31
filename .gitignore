@@ -1,0 +1,96 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.cer
+secrets/
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+dist/
+build/
+site/
+pip-wheel-metadata/
+*.egg-info/
+.venv/
+venv/
+ENV/
+env/
+
+# Backend project local state
+smartfit-backend/.env
+smartfit-backend/.env.local
+smartfit-backend/.venv/
+smartfit-backend/.python-version
+smartfit-backend/alembic/__pycache__/
+smartfit-backend/alembic/versions/__pycache__/
+smartfit-backend/app/__pycache__/
+smartfit-backend/src/**/__pycache__/
+smartfit-backend/tests/**/__pycache__/
+
+# Docker / containers local files
+docker-data/
+pgdata/
+postgres-data/
+*.pid
+
+# Swift / Xcode / iOS
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.xccheckout
+*.xcscmblueprint
+.build/
+.swiftpm/
+Package.resolved
+
+# Test artifacts / temp
+tmp/
+temp/
+*.sqlite
+*.sqlite3
