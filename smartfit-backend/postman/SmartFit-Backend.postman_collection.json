@@ -877,7 +877,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"message\": \"Give me a 30-minute recovery workout suggestion.\"\n}"
+              "raw": "{\n  \"workout_id\": \"{{workoutId}}\",\n  \"current_workout_plan_exercise_id\": \"{{workoutPlanExerciseId}}\",\n  \"message\": \"The cable machine is busy. What can I do instead?\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/ai/chat",
@@ -889,6 +889,58 @@
                 "v1",
                 "ai",
                 "chat"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get AI Chat History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ai/chat/history?workout_id={{workoutId}}&limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ai",
+                "chat",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "workout_id",
+                  "value": "{{workoutId}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get AI Usage Today",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ai/usage/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ai",
+                "usage",
+                "today"
               ]
             }
           }

@@ -42,3 +42,14 @@ class ExerciseRepository(ABC):
     @abstractmethod
     async def get_alternative(self, exercise_id: UUID) -> Exercise | None:
         raise NotImplementedError
+
+    @abstractmethod
+    async def find_replacement_candidates(
+        self,
+        current_exercise_id: UUID,
+        primary_muscle: str,
+        equipment: list[str],
+        level: str | None,
+        limit: int = 5,
+    ) -> list[Exercise]:
+        raise NotImplementedError

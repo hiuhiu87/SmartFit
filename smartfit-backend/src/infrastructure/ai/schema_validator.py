@@ -1,8 +1,12 @@
+from uuid import UUID
+
 from src.domain.ai.entities import (
+    AIChatResult,
+    AIChatSuggestedAction,
     AIWorkoutExerciseResult,
     AIWorkoutGenerationResult,
 )
-from src.domain.common.exceptions import AIInvalidOutputError
+from src.domain.common.exceptions import AIChatInvalidOutputError, AIInvalidOutputError
 
 
 class AIWorkoutSchemaValidator:
@@ -86,4 +90,112 @@ class AIWorkoutSchemaValidator:
             exercises=parsed_exercises,
             reasoning_summary=reasoning_summary.strip(),
             safety_note=safety_note.strip(),
+        )
+
+
+class AIChatSchemaValidator:
+    ALLOWED_INTENTS = {
+        "replace_exercise",
+        "reduce_difficulty",
+        "explain_exercise",
+        "rest_time_advice",
+        "general_workout_question",
+        "safety_warning",
+    }
+    ALLOWED_ACTION_TYPES = {
+        "replace_exercise",
+        "reduce_current_exercise",
+        "adjust_rest_time",
+        "none",
+    }
+
+    def validate(self, raw: dict) -> AIChatResult:
+        if not isinstance(raw, dict):
+            raise AIChatInvalidOutputError("AI chat output must be a JSON object.")
+
+        reply = raw.get("reply")
+        intent = raw.get("intent")
+        action_raw = raw.get("suggested_action")
+
+        if not isinstance(reply, str) or not reply.strip():
+            raise AIChatInvalidOutputError("AI chat output missing reply.")
+        if len(reply) > 600:
+            raise AIChatInvalidOutputError("AI chat reply is too long.")
+        if intent not in self.ALLOWED_INTENTS:
+            raise AIChatInvalidOutputError("AI chat intent is invalid.")
+
+        suggested_action = None
+        if action_raw is not None:
+            if not isinstance(action_raw, dict):
+                raise AIChatInvalidOutputError("AI chat suggested_action must be an object.")
+            action_type = action_raw.get("type")
+            if action_type not in self.ALLOWED_ACTION_TYPES:
+                raise AIChatInvalidOutputError("AI chat action type is invalid.")
+            if action_type == "none":
+                suggested_action = None
+            else:
+                exercise_id = action_raw.get("exercise_id")
+                exercise_name = action_raw.get("exercise_name")
+                target_sets = action_raw.get("target_sets")
+                target_reps = action_raw.get("target_reps")
+                rest_seconds = action_raw.get("rest_seconds")
+                target_rpe = action_raw.get("target_rpe")
+                reason = action_raw.get("reason")
+
+                if action_type == "replace_exercise":
+                    if not isinstance(exercise_id, str) or not exercise_id.strip():
+                        raise AIChatInvalidOutputError(
+                            "Replace action requires exercise_id."
+                        )
+                    if not isinstance(exercise_name, str) or not exercise_name.strip():
+                        raise AIChatInvalidOutputError(
+                            "Replace action requires exercise_name."
+                        )
+                if target_sets is not None and (
+                    not isinstance(target_sets, int) or not (1 <= target_sets <= 5)
+                ):
+                    raise AIChatInvalidOutputError("target_sets must be 1..5.")
+                if target_reps is not None and (
+                    not isinstance(target_reps, str) or not target_reps.strip()
+                ):
+                    raise AIChatInvalidOutputError("target_reps must be a string.")
+                if rest_seconds is not None and (
+                    not isinstance(rest_seconds, int) or not (15 <= rest_seconds <= 300)
+                ):
+                    raise AIChatInvalidOutputError("rest_seconds must be 15..300.")
+                if target_rpe is not None and (
+                    not isinstance(target_rpe, int) or not (1 <= target_rpe <= 10)
+                ):
+                    raise AIChatInvalidOutputError("target_rpe must be 1..10.")
+                if reason is not None and not isinstance(reason, str):
+                    raise AIChatInvalidOutputError("reason must be a string.")
+
+                parsed_exercise_id = None
+                if isinstance(exercise_id, str) and exercise_id.strip():
+                    try:
+                        parsed_exercise_id = UUID(exercise_id)
+                    except ValueError as exc:
+                        raise AIChatInvalidOutputError(
+                            "exercise_id must be a valid UUID."
+                        ) from exc
+                suggested_action = AIChatSuggestedAction(
+                    type=action_type,
+                    exercise_id=parsed_exercise_id,
+                    exercise_name=exercise_name,
+                    target_sets=target_sets,
+                    target_reps=target_reps,
+                    rest_seconds=rest_seconds,
+                    target_rpe=target_rpe,
+                    reason=reason,
+                )
+
+        if intent == "safety_warning" and suggested_action is not None:
+            raise AIChatInvalidOutputError(
+                "safety_warning response must not include a suggested action."
+            )
+
+        return AIChatResult(
+            reply=reply.strip(),
+            intent=intent,
+            suggested_action=suggested_action,
         )

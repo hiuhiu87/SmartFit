@@ -20,6 +20,7 @@ from src.domain.common.exceptions import (
 )
 from src.infrastructure.ai.gemini_workout_generator import GeminiWorkoutGenerator
 from src.infrastructure.database.base import utcnow
+from src.infrastructure.database.models.ai_model import AIRequestModel, AIUsageDailyModel
 from src.infrastructure.database.models.exercise_model import ExerciseAlternativeModel, ExerciseModel
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
 from src.infrastructure.database.models.user_model import UserEquipmentModel, UserModel, UserProfileModel
@@ -60,6 +61,8 @@ async def gemini_test_context(tmp_path: Path):
                     ReadinessScoreModel.__table__,
                     ExerciseModel.__table__,
                     ExerciseAlternativeModel.__table__,
+                    AIRequestModel.__table__,
+                    AIUsageDailyModel.__table__,
                     WorkoutPlanModel.__table__,
                     WorkoutPlanExerciseModel.__table__,
                 ],

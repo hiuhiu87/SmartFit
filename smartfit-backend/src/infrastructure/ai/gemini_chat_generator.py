@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 from typing import Any
 
 from app.settings import get_settings
@@ -12,23 +11,21 @@ from src.domain.ai.entities import (
 )
 from src.domain.ai.ports import AIWorkoutGeneratorPort
 from src.domain.common.exceptions import (
+    AIChatGenerationError,
+    AIChatInvalidOutputError,
     AIConfigurationError,
-    AIInvalidOutputError,
     AIProviderTimeoutError,
     AIRateLimitError,
-    AIGenerationError,
 )
-from src.infrastructure.ai.gemini_prompt_builder import GeminiPromptBuilder
-from src.infrastructure.ai.schema_validator import AIWorkoutSchemaValidator
-
-logger = logging.getLogger(__name__)
+from src.infrastructure.ai.gemini_chat_prompt_builder import GeminiChatPromptBuilder
+from src.infrastructure.ai.schema_validator import AIChatSchemaValidator
 
 
-class GeminiWorkoutGenerator(AIWorkoutGeneratorPort):
+class GeminiAIChatGenerator(AIWorkoutGeneratorPort):
     def __init__(
         self,
-        prompt_builder: GeminiPromptBuilder,
-        schema_validator: AIWorkoutSchemaValidator,
+        prompt_builder: GeminiChatPromptBuilder,
+        schema_validator: AIChatSchemaValidator,
         client: Any | None = None,
     ) -> None:
         self.prompt_builder = prompt_builder
@@ -38,47 +35,39 @@ class GeminiWorkoutGenerator(AIWorkoutGeneratorPort):
     async def generate_workout(
         self, context: AIWorkoutGenerationContext
     ) -> AIWorkoutGenerationResult:
+        raise NotImplementedError("Use GeminiWorkoutGenerator for workout generation.")
+
+    async def chat(self, context: AIChatContext) -> AIChatResult:
         settings = get_settings()
         if not settings.GEMINI_API_KEY:
             raise AIConfigurationError("Gemini API key is not configured.")
 
-        prompt = self.prompt_builder.build_generate_workout_prompt(context)
-        logger.info(
-            "Calling Gemini workout generation for user %s with model=%s timeout=%ss allowed_exercises=%s prompt_chars=%s",
-            context.user_id,
-            settings.GEMINI_MODEL,
-            settings.GEMINI_TIMEOUT_SECONDS,
-            len(context.allowed_exercises),
-            len(prompt),
-        )
+        prompt = self.prompt_builder.build_chat_prompt(context)
         try:
             raw_text = await asyncio.wait_for(
                 self._generate_content(prompt),
                 timeout=settings.GEMINI_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError as exc:
-            raise AIProviderTimeoutError("Gemini request timed out.") from exc
+            raise AIProviderTimeoutError("Gemini chat request timed out.") from exc
         except AIRateLimitError:
             raise
-        except AIGenerationError:
+        except AIChatGenerationError:
             raise
         except Exception as exc:
-            raise AIGenerationError(f"Gemini provider error: {exc}") from exc
+            raise AIChatGenerationError(f"Gemini chat provider error: {exc}") from exc
 
         try:
             raw_payload = json.loads(raw_text)
         except json.JSONDecodeError as exc:
-            raise AIInvalidOutputError("Gemini returned invalid JSON.") from exc
+            raise AIChatInvalidOutputError("Gemini chat returned invalid JSON.") from exc
 
-        return self.schema_validator.validate_workout_output(raw_payload)
-
-    async def chat(self, context: AIChatContext) -> AIChatResult:
-        raise NotImplementedError("Use GeminiAIChatGenerator for AI chat.")
+        return self.schema_validator.validate(raw_payload)
 
     async def _generate_content(self, prompt: str) -> str:
         settings = get_settings()
         if self._client is not None:
-            result = self._client.generate_content(
+            result = self._client.chat(
                 model=settings.GEMINI_MODEL,
                 prompt=prompt,
                 max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS,
@@ -108,7 +97,7 @@ class GeminiWorkoutGenerator(AIWorkoutGeneratorPort):
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.2,
-                    max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS,
+                    max_output_tokens=min(settings.GEMINI_MAX_OUTPUT_TOKENS, 600),
                     response_mime_type="application/json",
                     thinking_config=types.ThinkingConfig(thinking_budget=0),
                 ),
@@ -121,7 +110,6 @@ class GeminiWorkoutGenerator(AIWorkoutGeneratorPort):
             if "429" in text or "rate limit" in text or "quota" in text:
                 raise AIRateLimitError("Gemini rate limit or quota exceeded.") from exc
             raise
-        logger.info("Gemini workout generation completed successfully.")
         return self._extract_text(response)
 
     def _extract_text(self, response: Any) -> str:
@@ -138,4 +126,4 @@ class GeminiWorkoutGenerator(AIWorkoutGeneratorPort):
                         part_text = getattr(part, "text", None)
                         if isinstance(part_text, str) and part_text.strip():
                             return part_text
-        raise AIInvalidOutputError("Gemini response does not contain usable text.")
+        raise AIChatInvalidOutputError("Gemini chat response does not contain usable text.")

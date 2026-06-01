@@ -10,6 +10,7 @@ from src.domain.common.enums import (
     WorkoutSource,
     WorkoutStatus,
 )
+from src.domain.ai.entities import AIRequestLog, AIUsageDaily
 from src.domain.exercise.entities import Exercise
 from src.domain.health.entities import HealthSummary, ManualCheckin
 from src.domain.readiness.entities import ReadinessScore
@@ -21,7 +22,9 @@ from src.domain.workout.entities import (
     WorkoutPlanExercise,
     WorkoutSetLog,
 )
+from src.infrastructure.database.base import utcnow
 from src.infrastructure.database.models.exercise_model import ExerciseModel
+from src.infrastructure.database.models.ai_model import AIRequestModel, AIUsageDailyModel
 from src.infrastructure.database.models.health_model import (
     HealthSummaryModel,
     ManualCheckinModel,
@@ -407,4 +410,43 @@ def workout_feedback_domain_to_model(entity: WorkoutFeedback) -> WorkoutFeedback
         comments=entity.comments,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
+    )
+
+
+def ai_usage_daily_model_to_domain(model: AIUsageDailyModel) -> AIUsageDaily:
+    return AIUsageDaily(
+        user_id=model.user_id,
+        date=model.date,
+        ai_workout_count=model.ai_workout_count,
+        ai_chat_count=model.ai_chat_count,
+        ai_replacement_count=model.ai_replacement_count,
+        ai_weekly_report_count=model.ai_weekly_report_count,
+        total_ai_count=model.total_ai_count,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def ai_request_log_domain_to_model(entity: AIRequestLog) -> AIRequestModel:
+    created_at = entity.created_at or utcnow()
+    return AIRequestModel(
+        id=entity.id,
+        user_id=entity.user_id,
+        workout_plan_id=entity.workout_plan_id,
+        request_type=entity.request_type,
+        provider=entity.provider,
+        model_name=entity.model_name,
+        generation_mode=entity.generation_mode,
+        status=entity.status,
+        prompt=None,
+        response=None,
+        input_payload=entity.input_payload or {},
+        output_payload=entity.output_payload or {},
+        error_code=entity.error_code,
+        error_message=entity.error_message,
+        fallback_used=entity.fallback_used,
+        latency_ms=entity.latency_ms,
+        request_metadata={},
+        created_at=created_at,
+        updated_at=created_at,
     )

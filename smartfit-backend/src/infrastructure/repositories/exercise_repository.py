@@ -121,3 +121,39 @@ class SQLModelExerciseRepository(ExerciseRepository):
         if alternative is None:
             return None
         return await self.get_by_id(alternative.alternative_exercise_id)
+
+    async def find_replacement_candidates(
+        self,
+        current_exercise_id: UUID,
+        primary_muscle: str,
+        equipment: list[str],
+        level: str | None,
+        limit: int = 5,
+    ) -> list[Exercise]:
+        allowed_equipment = list(
+            dict.fromkeys(equipment + (["bodyweight"] if "bodyweight" not in equipment else []))
+        )
+        filters = [
+            ExerciseModel.is_active.is_(True),
+            ExerciseModel.id != current_exercise_id,
+            ExerciseModel.muscle_group == primary_muscle,
+            ExerciseModel.equipment_type.in_(allowed_equipment),
+        ]
+        statement = select(ExerciseModel).where(*filters)
+        if level is not None:
+            level_statement = (
+                statement.where(ExerciseModel.training_level == level)
+                .order_by(ExerciseModel.name.asc())
+                .limit(limit)
+            )
+            level_result = await self.session.execute(level_statement)
+            level_items = [
+                exercise_model_to_domain(model) for model in level_result.scalars().all()
+            ]
+            if level_items:
+                return level_items
+
+        result = await self.session.execute(
+            statement.order_by(ExerciseModel.name.asc()).limit(limit)
+        )
+        return [exercise_model_to_domain(model) for model in result.scalars().all()]

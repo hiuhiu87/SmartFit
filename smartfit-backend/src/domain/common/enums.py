@@ -94,6 +94,7 @@ class AIRequestType(StrEnum):
     GENERATE_WORKOUT = "generate_workout"
     REPLACE_EXERCISE = "replace_exercise"
     CHAT = "chat"
+    WEEKLY_REPORT = "weekly_report"
 
 
 class AIRequestStatus(StrEnum):

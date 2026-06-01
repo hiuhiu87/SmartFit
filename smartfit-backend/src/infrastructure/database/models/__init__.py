@@ -1,6 +1,7 @@
 from src.infrastructure.database.models.ai_model import (
     AIChatMessageModel,
     AIRequestModel,
+    AIUsageDailyModel,
     AnalyticsEventModel,
 )
 from src.infrastructure.database.models.exercise_model import (
@@ -31,6 +32,7 @@ from src.infrastructure.database.models.workout_model import (
 __all__ = [
     "AIChatMessageModel",
     "AIRequestModel",
+    "AIUsageDailyModel",
     "AnalyticsEventModel",
     "ExerciseAlternativeModel",
     "ExerciseModel",

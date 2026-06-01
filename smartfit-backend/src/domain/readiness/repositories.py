@@ -21,3 +21,7 @@ class ReadinessRepository(ABC):
         self, user_id: UUID, limit: int = 30
     ) -> list[ReadinessScore]:
         raise NotImplementedError
+
+    @abstractmethod
+    async def get_latest(self, user_id: UUID) -> ReadinessScore | None:
+        raise NotImplementedError

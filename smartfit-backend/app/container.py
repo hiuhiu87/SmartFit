@@ -1,3 +1,5 @@
+from src.application.ai.use_cases import AIChatUseCase, GetAIChatHistoryUseCase
+from src.application.ai_usage.use_cases import AIUsageService, GetAIUsageTodayUseCase
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.application.auth.use_cases import (
@@ -38,18 +40,28 @@ from src.application.workout.use_cases import (
     StartWorkoutUseCase,
 )
 from src.domain.ai.ports import AIWorkoutGeneratorPort
-from src.domain.common.exceptions import AIConfigurationError
+from src.domain.ai.services import AIUsagePolicy
 from src.domain.readiness.services import ReadinessCalculator
 from src.domain.workout.services import (
     RuleBasedWorkoutGenerator,
     WorkoutSafetyPolicy,
     WorkoutVolumeCalculator,
 )
+from src.infrastructure.ai.gemini_chat_generator import GeminiAIChatGenerator
+from src.infrastructure.ai.gemini_chat_prompt_builder import GeminiChatPromptBuilder
 from src.infrastructure.ai.gemini_prompt_builder import GeminiPromptBuilder
 from src.infrastructure.ai.gemini_workout_generator import GeminiWorkoutGenerator
 from src.infrastructure.ai.output_mapper import AIWorkoutOutputMapper
-from src.infrastructure.ai.safety_validator import AIWorkoutSafetyValidator
-from src.infrastructure.ai.schema_validator import AIWorkoutSchemaValidator
+from src.infrastructure.ai.safety_validator import (
+    AIChatSafetyValidator,
+    AIWorkoutSafetyValidator,
+)
+from src.infrastructure.ai.schema_validator import (
+    AIChatSchemaValidator,
+    AIWorkoutSchemaValidator,
+)
+from src.infrastructure.repositories.ai_repository import SQLModelAIRequestRepository
+from src.infrastructure.repositories.ai_usage_repository import SQLModelAIUsageRepository
 from src.infrastructure.repositories.exercise_repository import SQLModelExerciseRepository
 from src.infrastructure.repositories.health_repository import SQLModelHealthRepository
 from src.infrastructure.repositories.readiness_repository import SQLModelReadinessRepository
@@ -59,6 +71,7 @@ from src.infrastructure.repositories.progress_repository import SQLModelProgress
 from src.infrastructure.security.jwt_provider import JWTProvider
 from src.infrastructure.security.password_hasher import PasswordHasher
 from src.domain.progress.services import ProgressCalculator
+from src.infrastructure.repositories.subscription_repository import SQLModelSubscriptionRepository
 
 
 class Container:
@@ -70,13 +83,21 @@ class Container:
         self.workout_safety_policy = WorkoutSafetyPolicy()
         self.workout_volume_calculator = WorkoutVolumeCalculator()
         self.progress_calculator = ProgressCalculator()
+        self.ai_usage_policy = AIUsagePolicy()
         self.gemini_prompt_builder = GeminiPromptBuilder()
+        self.gemini_chat_prompt_builder = GeminiChatPromptBuilder()
         self.ai_workout_schema_validator = AIWorkoutSchemaValidator()
+        self.ai_chat_schema_validator = AIChatSchemaValidator()
         self.ai_workout_safety_validator = AIWorkoutSafetyValidator()
+        self.ai_chat_safety_validator = AIChatSafetyValidator()
         self.ai_workout_output_mapper = AIWorkoutOutputMapper()
         self.gemini_workout_generator_impl: AIWorkoutGeneratorPort = GeminiWorkoutGenerator(
             self.gemini_prompt_builder,
             self.ai_workout_schema_validator,
+        )
+        self.gemini_ai_chat_generator_impl: AIWorkoutGeneratorPort = GeminiAIChatGenerator(
+            self.gemini_chat_prompt_builder,
+            self.ai_chat_schema_validator,
         )
 
     def register_user_use_case(self, session: AsyncSession) -> RegisterUserUseCase:
@@ -129,6 +150,28 @@ class Container:
         self, session: AsyncSession
     ) -> SQLModelProgressRepository:
         return SQLModelProgressRepository(session)
+
+    def get_ai_request_repository(
+        self, session: AsyncSession
+    ) -> SQLModelAIRequestRepository:
+        return SQLModelAIRequestRepository(session)
+
+    def get_ai_usage_repository(
+        self, session: AsyncSession
+    ) -> SQLModelAIUsageRepository:
+        return SQLModelAIUsageRepository(session)
+
+    def get_subscription_repository(
+        self, session: AsyncSession
+    ) -> SQLModelSubscriptionRepository:
+        return SQLModelSubscriptionRepository(session)
+
+    def get_ai_usage_service(self, session: AsyncSession) -> AIUsageService:
+        return AIUsageService(
+            usage_repository=self.get_ai_usage_repository(session),
+            usage_policy=self.ai_usage_policy,
+            subscription_repository=None,
+        )
 
     def list_exercises_use_case(
         self, session: AsyncSession
@@ -189,6 +232,7 @@ class Container:
             workout_repository=self.get_workout_repository(session),
             generator=self.workout_generator,
             ai_generator=self.get_gemini_workout_generator(),
+            ai_usage_service=self.get_ai_usage_service(session),
             ai_safety_validator=self.ai_workout_safety_validator,
             ai_output_mapper=self.ai_workout_output_mapper,
             safety_policy=self.workout_safety_policy,
@@ -208,6 +252,18 @@ class Container:
 
     def get_gemini_workout_generator(self) -> AIWorkoutGeneratorPort:
         return self.gemini_workout_generator_impl
+
+    def get_gemini_chat_prompt_builder(self) -> GeminiChatPromptBuilder:
+        return self.gemini_chat_prompt_builder
+
+    def get_ai_chat_schema_validator(self) -> AIChatSchemaValidator:
+        return self.ai_chat_schema_validator
+
+    def get_ai_chat_safety_validator(self) -> AIChatSafetyValidator:
+        return self.ai_chat_safety_validator
+
+    def get_gemini_ai_chat_generator(self) -> AIWorkoutGeneratorPort:
+        return self.gemini_ai_chat_generator_impl
 
     def get_workout_detail_use_case(
         self, session: AsyncSession
@@ -256,6 +312,31 @@ class Container:
         return GetWeeklyReportUseCase(
             self.get_progress_overview_use_case(session), self.progress_calculator
         )
+
+    def get_ai_chat_use_case(self, session: AsyncSession) -> AIChatUseCase:
+        return AIChatUseCase(
+            user_repository=self.get_user_repository(session),
+            readiness_repository=self.get_readiness_repository(session),
+            exercise_repository=self.get_exercise_repository(session),
+            workout_repository=self.get_workout_repository(session),
+            ai_request_repository=self.get_ai_request_repository(session),
+            ai_chat_generator=self.get_gemini_ai_chat_generator(),
+            ai_chat_safety_validator=self.get_ai_chat_safety_validator(),
+            ai_usage_service=self.get_ai_usage_service(session),
+        )
+
+    def get_ai_chat_history_use_case(
+        self, session: AsyncSession
+    ) -> GetAIChatHistoryUseCase:
+        return GetAIChatHistoryUseCase(
+            workout_repository=self.get_workout_repository(session),
+            ai_request_repository=self.get_ai_request_repository(session),
+        )
+
+    def get_ai_usage_today_use_case(
+        self, session: AsyncSession
+    ) -> GetAIUsageTodayUseCase:
+        return GetAIUsageTodayUseCase(self.get_ai_usage_service(session))
 
 
 container = Container()

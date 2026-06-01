@@ -44,3 +44,19 @@ class AIExerciseMappingError(AIGenerationError):
 
 class AIConfigurationError(AIGenerationError):
     """Raised when AI provider configuration is missing or invalid."""
+
+
+class AIChatGenerationError(AIGenerationError):
+    """Raised when AI chat generation fails."""
+
+
+class AIChatInvalidOutputError(AIChatGenerationError):
+    """Raised when AI chat output cannot be parsed or validated."""
+
+
+class AIChatUnsafeOutputError(AIChatGenerationError):
+    """Raised when AI chat output violates safety constraints."""
+
+
+class AIUsageLimitExceededError(DomainError):
+    """Raised when daily internal AI usage limit is exceeded."""

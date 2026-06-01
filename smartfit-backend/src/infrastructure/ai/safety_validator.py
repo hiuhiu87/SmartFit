@@ -1,5 +1,16 @@
-from src.domain.ai.entities import AIWorkoutGenerationContext, AIWorkoutGenerationResult
-from src.domain.common.exceptions import AIExerciseMappingError, AIUnsafeOutputError
+from uuid import UUID
+
+from src.domain.ai.entities import (
+    AIChatContext,
+    AIChatResult,
+    AIWorkoutGenerationContext,
+    AIWorkoutGenerationResult,
+)
+from src.domain.common.exceptions import (
+    AIChatUnsafeOutputError,
+    AIExerciseMappingError,
+    AIUnsafeOutputError,
+)
 
 
 class AIWorkoutSafetyValidator:
@@ -40,3 +51,78 @@ class AIWorkoutSafetyValidator:
         elif context.readiness_score < 40:
             if any(item.rpe > 7 for item in result.exercises):
                 raise AIUnsafeOutputError("Low readiness does not allow rpe above 7.")
+
+
+class AIChatSafetyValidator:
+    PAIN_TERMS = {
+        "pain",
+        "hurt",
+        "hurts",
+        "sharp",
+        "dizzy",
+        "dizziness",
+        "lightheaded",
+        "discomfort",
+    }
+    MEDICAL_TERMS = {
+        "diagnose",
+        "diagnosis",
+        "tear",
+        "fracture",
+        "dislocation",
+        "tendonitis",
+    }
+    IGNORE_PAIN_TERMS = {
+        "push through the pain",
+        "ignore the pain",
+        "keep going through pain",
+    }
+    MODIFIED_WORKOUT_TERMS = {
+        "i replaced",
+        "i changed your workout",
+        "i updated your workout",
+    }
+
+    def validate(self, result: AIChatResult, context: AIChatContext) -> None:
+        reply_lower = result.reply.lower()
+        message_lower = context.user_message.lower()
+
+        if any(term in reply_lower for term in self.MEDICAL_TERMS):
+            raise AIChatUnsafeOutputError("AI chat response contains medical diagnosis language.")
+        if any(term in reply_lower for term in self.IGNORE_PAIN_TERMS):
+            raise AIChatUnsafeOutputError("AI chat response tells the user to ignore pain.")
+        if any(term in reply_lower for term in self.MODIFIED_WORKOUT_TERMS):
+            raise AIChatUnsafeOutputError(
+                "AI chat response incorrectly claims the workout was already changed."
+            )
+        if any(term in message_lower for term in self.PAIN_TERMS) and result.intent not in {
+            "safety_warning",
+            "reduce_difficulty",
+        }:
+            raise AIChatUnsafeOutputError(
+                "Pain-related user message requires a safety-focused response."
+            )
+
+        if result.suggested_action is None:
+            return
+
+        if result.suggested_action.type == "replace_exercise":
+            replacement_ids = {
+                str(item.get("exercise_id"))
+                for item in context.available_replacements
+                if item.get("exercise_id") is not None
+            }
+            if str(result.suggested_action.exercise_id) not in replacement_ids:
+                raise AIChatUnsafeOutputError(
+                    "AI chat replacement exercise is not in allowed replacements."
+                )
+
+        readiness_score = None
+        if context.readiness_summary is not None:
+            readiness_score = context.readiness_summary.get("score")
+        if readiness_score is not None and readiness_score < 40:
+            target_rpe = result.suggested_action.target_rpe
+            if target_rpe is not None and target_rpe > 7:
+                raise AIChatUnsafeOutputError(
+                    "Low readiness does not allow target_rpe above 7."
+                )

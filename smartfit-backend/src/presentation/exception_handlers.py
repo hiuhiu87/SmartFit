@@ -10,6 +10,7 @@ from src.domain.common.exceptions import (
     AIInvalidOutputError,
     AIProviderTimeoutError,
     AIRateLimitError,
+    AIUsageLimitExceededError,
     AIUnsafeOutputError,
     DomainError,
     NotFoundError,
@@ -58,6 +59,18 @@ def register_exception_handlers(app: FastAPI) -> None:
             content={
                 "success": False,
                 "error": {"code": "ai_rate_limit", "message": str(exc)},
+            },
+        )
+
+    @app.exception_handler(AIUsageLimitExceededError)
+    async def handle_ai_usage_limit(
+        _: Request, exc: AIUsageLimitExceededError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": {"code": "AI_LIMIT_REACHED", "message": str(exc)},
             },
         )
 

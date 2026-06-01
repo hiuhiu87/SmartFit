@@ -1,7 +1,12 @@
 import logging
+from datetime import datetime, timezone
+from time import perf_counter
 from uuid import UUID, uuid4
 
-from src.domain.ai.entities import AIAllowedExercise, AIWorkoutGenerationContext
+from app.settings import get_settings
+from src.application.ai_usage.commands import CheckAIUsageLimitCommand, RecordAIUsageCommand
+from src.application.ai_usage.use_cases import AIUsageService
+from src.domain.ai.entities import AIAllowedExercise, AIRequestLog, AIWorkoutGenerationContext
 from src.domain.ai.ports import AIWorkoutGeneratorPort
 from src.application.workout.commands import (
     CompleteWorkoutCommand,
@@ -35,6 +40,7 @@ from src.domain.common.exceptions import (
     AIInvalidOutputError,
     AIProviderTimeoutError,
     AIRateLimitError,
+    AIUsageLimitExceededError,
     AIUnsafeOutputError,
 )
 from src.domain.exercise.entities import Exercise
@@ -64,6 +70,7 @@ class GenerateWorkoutUseCase:
         workout_repository: WorkoutRepository,
         generator: RuleBasedWorkoutGenerator,
         ai_generator: AIWorkoutGeneratorPort,
+        ai_usage_service: AIUsageService,
         ai_safety_validator: AIWorkoutSafetyValidator,
         ai_output_mapper: AIWorkoutOutputMapper,
         safety_policy: WorkoutSafetyPolicy,
@@ -74,6 +81,7 @@ class GenerateWorkoutUseCase:
         self.workout_repository = workout_repository
         self.generator = generator
         self.ai_generator = ai_generator
+        self.ai_usage_service = ai_usage_service
         self.ai_safety_validator = ai_safety_validator
         self.ai_output_mapper = ai_output_mapper
         self.safety_policy = safety_policy
@@ -116,18 +124,91 @@ class GenerateWorkoutUseCase:
         if not allowed:
             raise ValidationError("Workout generation failed: no exercises found.")
 
+        usage_date = self._usage_date()
+        ai_input_payload = {
+            "readiness_score": int(round(readiness.score)),
+            "readiness_category": readiness.category.value,
+            "equipment": equipment,
+            "focus_muscle": command.focus_muscle,
+            "allowed_exercise_slugs": [item.slug for item in allowed[:16]],
+        }
+
         if command.generation_mode == "rule_based":
             plan = self._generate_rule_based(
                 command, profile.primary_goal.value, profile.training_level.value, readiness.score, readiness.recommendation.value, allowed
             )
         elif command.generation_mode == "gemini":
-            plan = await self._generate_with_gemini(
-                command, profile.primary_goal.value, profile.training_level.value, readiness, equipment, allowed
+            try:
+                await self.ai_usage_service.check_limit(
+                    CheckAIUsageLimitCommand(
+                        user_id=command.user_id,
+                        request_type="generate_workout",
+                        target_date=usage_date,
+                    )
+                )
+            except AIUsageLimitExceededError as exc:
+                await self.ai_usage_service.record_log_only(
+                    self._build_ai_request_log(
+                        request_id=uuid4(),
+                        command=command,
+                        status="blocked",
+                        input_payload=ai_input_payload,
+                        error_code="AI_LIMIT_REACHED",
+                        error_message=str(exc),
+                        fallback_used=False,
+                        latency_ms=0,
+                    )
+                )
+                raise
+            plan = await self._generate_with_gemini_with_logging(
+                command=command,
+                goal=profile.primary_goal.value,
+                training_level=profile.training_level.value,
+                readiness=readiness,
+                equipment=equipment,
+                allowed=allowed,
+                usage_date=usage_date,
+                input_payload=ai_input_payload,
             )
         else:
             try:
-                plan = await self._generate_with_gemini(
-                    command, profile.primary_goal.value, profile.training_level.value, readiness, equipment, allowed
+                await self.ai_usage_service.check_limit(
+                    CheckAIUsageLimitCommand(
+                        user_id=command.user_id,
+                        request_type="generate_workout",
+                        target_date=usage_date,
+                    )
+                )
+                plan = await self._generate_with_gemini_with_logging(
+                    command=command,
+                    goal=profile.primary_goal.value,
+                    training_level=profile.training_level.value,
+                    readiness=readiness,
+                    equipment=equipment,
+                    allowed=allowed,
+                    usage_date=usage_date,
+                    input_payload=ai_input_payload,
+                )
+            except AIUsageLimitExceededError as exc:
+                await self.ai_usage_service.record_log_only(
+                    self._build_ai_request_log(
+                        request_id=uuid4(),
+                        command=command,
+                        status="blocked",
+                        input_payload=ai_input_payload,
+                        error_code="AI_LIMIT_REACHED",
+                        error_message=str(exc),
+                        fallback_used=True,
+                        latency_ms=0,
+                    )
+                )
+                plan = self._generate_rule_based(
+                    command,
+                    profile.primary_goal.value,
+                    profile.training_level.value,
+                    readiness.score,
+                    readiness.recommendation.value,
+                    allowed,
                 )
             except (
                 AIConfigurationError,
@@ -244,6 +325,78 @@ class GenerateWorkoutUseCase:
         plan = self.ai_output_mapper.to_workout_plan(result, context)
         return plan
 
+    async def _generate_with_gemini_with_logging(
+        self,
+        command: GenerateWorkoutCommand,
+        goal: str,
+        training_level: str,
+        readiness,
+        equipment: list[str],
+        allowed: list[Exercise],
+        usage_date,
+        input_payload: dict,
+    ):
+        request_id = uuid4()
+        started = perf_counter()
+        try:
+            plan = await self._generate_with_gemini(
+                command, goal, training_level, readiness, equipment, allowed
+            )
+        except (
+            AIConfigurationError,
+            AIGenerationError,
+            AIRateLimitError,
+            AIProviderTimeoutError,
+            AIInvalidOutputError,
+            AIUnsafeOutputError,
+            AIExerciseMappingError,
+        ) as exc:
+            latency_ms = int((perf_counter() - started) * 1000)
+            await self.ai_usage_service.record(
+                RecordAIUsageCommand(
+                    user_id=command.user_id,
+                    request_type="generate_workout",
+                    target_date=usage_date,
+                    request_log=self._build_ai_request_log(
+                        request_id=request_id,
+                        command=command,
+                        status="fallback_used" if command.generation_mode == "auto" else "failed",
+                        input_payload=input_payload,
+                        output_payload={},
+                        error_code=exc.__class__.__name__,
+                        error_message=str(exc),
+                        fallback_used=command.generation_mode == "auto",
+                        latency_ms=latency_ms,
+                    ),
+                )
+            )
+            raise
+
+        latency_ms = int((perf_counter() - started) * 1000)
+        output_payload = {
+            "title": plan.title,
+            "training_decision": plan.decision,
+            "exercise_ids": [str(item.exercise_id) for item in plan.exercises],
+            "exercise_count": len(plan.exercises),
+        }
+        await self.ai_usage_service.record(
+            RecordAIUsageCommand(
+                user_id=command.user_id,
+                request_type="generate_workout",
+                target_date=usage_date,
+                request_log=self._build_ai_request_log(
+                    request_id=request_id,
+                    command=command,
+                    status="success",
+                    input_payload=input_payload,
+                    output_payload=output_payload,
+                    fallback_used=False,
+                    latency_ms=latency_ms,
+                ),
+            )
+        )
+        return plan
+
     def _select_ai_allowed_exercises(
         self,
         allowed: list[Exercise],
@@ -271,6 +424,39 @@ class GenerateWorkoutUseCase:
         ]
         shortlisted = sorted(filtered, key=_score)[:AI_ALLOWED_EXERCISES_LIMIT]
         return shortlisted or allowed[:AI_ALLOWED_EXERCISES_LIMIT]
+
+    def _usage_date(self):
+        return datetime.now(timezone.utc).date()
+
+    def _build_ai_request_log(
+        self,
+        request_id,
+        command: GenerateWorkoutCommand,
+        status: str,
+        input_payload: dict,
+        output_payload: dict | None = None,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        fallback_used: bool = False,
+        latency_ms: int | None = None,
+    ) -> AIRequestLog:
+        settings = get_settings()
+        return AIRequestLog(
+            id=request_id,
+            user_id=command.user_id,
+            workout_plan_id=None,
+            request_type="generate_workout",
+            provider=settings.AI_PROVIDER,
+            model_name=settings.GEMINI_MODEL,
+            generation_mode=command.generation_mode,
+            input_payload=input_payload,
+            output_payload=output_payload or {},
+            status=status,
+            error_code=error_code,
+            error_message=error_message,
+            fallback_used=fallback_used,
+            latency_ms=latency_ms,
+        )
 
     def _to_exercise_dto(
         self, item, exercise: Exercise | None

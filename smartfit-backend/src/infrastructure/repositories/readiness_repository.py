@@ -67,3 +67,14 @@ class SQLModelReadinessRepository(ReadinessRepository):
         return [
             readiness_score_model_to_domain(model) for model in result.scalars().all()
         ]
+
+    async def get_latest(self, user_id: UUID) -> ReadinessScore | None:
+        statement = (
+            select(ReadinessScoreModel)
+            .where(ReadinessScoreModel.user_id == user_id)
+            .order_by(ReadinessScoreModel.date.desc(), ReadinessScoreModel.updated_at.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(statement)
+        model = result.scalar_one_or_none()
+        return readiness_score_model_to_domain(model) if model else None
