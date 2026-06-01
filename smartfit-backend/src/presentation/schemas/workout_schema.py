@@ -1,5 +1,6 @@
 from datetime import date as date_type
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
@@ -21,6 +22,7 @@ class GenerateWorkoutRequestSchema(BaseModel):
         default_factory=list,
         validation_alias=AliasChoices("equipment", "equipment_types"),
     )
+    generation_mode: Literal["auto", "gemini", "rule_based"] = "auto"
     avoid_exercises: list[str] = Field(default_factory=list)
     user_note: str | None = Field(default=None, max_length=2000)
 

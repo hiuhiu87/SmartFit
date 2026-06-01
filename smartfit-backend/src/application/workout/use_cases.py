@@ -1,5 +1,8 @@
+import logging
 from uuid import UUID, uuid4
 
+from src.domain.ai.entities import AIAllowedExercise, AIWorkoutGenerationContext
+from src.domain.ai.ports import AIWorkoutGeneratorPort
 from src.application.workout.commands import (
     CompleteWorkoutCommand,
     GenerateWorkoutCommand,
@@ -25,6 +28,15 @@ from src.domain.common.enums import (
     WorkoutStatus,
 )
 from src.domain.common.exceptions import NotFoundError, ValidationError
+from src.domain.common.exceptions import (
+    AIConfigurationError,
+    AIExerciseMappingError,
+    AIGenerationError,
+    AIInvalidOutputError,
+    AIProviderTimeoutError,
+    AIRateLimitError,
+    AIUnsafeOutputError,
+)
 from src.domain.exercise.entities import Exercise
 from src.domain.exercise.repositories import ExerciseRepository
 from src.domain.readiness.repositories import ReadinessRepository
@@ -36,6 +48,11 @@ from src.domain.workout.services import (
     WorkoutSafetyPolicy,
     WorkoutVolumeCalculator,
 )
+from src.infrastructure.ai.output_mapper import AIWorkoutOutputMapper
+from src.infrastructure.ai.safety_validator import AIWorkoutSafetyValidator
+
+logger = logging.getLogger(__name__)
+AI_ALLOWED_EXERCISES_LIMIT = 16
 
 
 class GenerateWorkoutUseCase:
@@ -46,6 +63,9 @@ class GenerateWorkoutUseCase:
         exercise_repository: ExerciseRepository,
         workout_repository: WorkoutRepository,
         generator: RuleBasedWorkoutGenerator,
+        ai_generator: AIWorkoutGeneratorPort,
+        ai_safety_validator: AIWorkoutSafetyValidator,
+        ai_output_mapper: AIWorkoutOutputMapper,
         safety_policy: WorkoutSafetyPolicy,
     ) -> None:
         self.user_repository = user_repository
@@ -53,6 +73,9 @@ class GenerateWorkoutUseCase:
         self.exercise_repository = exercise_repository
         self.workout_repository = workout_repository
         self.generator = generator
+        self.ai_generator = ai_generator
+        self.ai_safety_validator = ai_safety_validator
+        self.ai_output_mapper = ai_output_mapper
         self.safety_policy = safety_policy
 
     async def execute(self, command: GenerateWorkoutCommand) -> WorkoutPlanDTO:
@@ -93,17 +116,41 @@ class GenerateWorkoutUseCase:
         if not allowed:
             raise ValidationError("Workout generation failed: no exercises found.")
 
-        plan = self.generator.generate(
-            user_id=command.user_id,
-            goal=profile.primary_goal.value,
-            training_level=profile.training_level.value,
-            readiness_score=int(round(readiness.score)),
-            readiness_recommendation=readiness.recommendation.value,
-            focus_muscle=command.focus_muscle,
-            available_time_minutes=command.available_time_minutes,
-            exercises=allowed,
-            avoid_exercises=command.avoid_exercises,
-        )
+        if command.generation_mode == "rule_based":
+            plan = self._generate_rule_based(
+                command, profile.primary_goal.value, profile.training_level.value, readiness.score, readiness.recommendation.value, allowed
+            )
+        elif command.generation_mode == "gemini":
+            plan = await self._generate_with_gemini(
+                command, profile.primary_goal.value, profile.training_level.value, readiness, equipment, allowed
+            )
+        else:
+            try:
+                plan = await self._generate_with_gemini(
+                    command, profile.primary_goal.value, profile.training_level.value, readiness, equipment, allowed
+                )
+            except (
+                AIConfigurationError,
+                AIGenerationError,
+                AIRateLimitError,
+                AIProviderTimeoutError,
+                AIInvalidOutputError,
+                AIUnsafeOutputError,
+                AIExerciseMappingError,
+            ) as exc:
+                logger.warning(
+                    "Gemini workout generation failed for user %s, falling back to rule-based: %s",
+                    command.user_id,
+                    exc,
+                )
+                plan = self._generate_rule_based(
+                    command,
+                    profile.primary_goal.value,
+                    profile.training_level.value,
+                    readiness.score,
+                    readiness.recommendation.value,
+                    allowed,
+                )
         plan.target_date = command.target_date
         self.safety_policy.validate(plan, readiness_score=readiness.score)
         saved = await self.workout_repository.save_plan(plan)
@@ -131,6 +178,99 @@ class GenerateWorkoutUseCase:
                 for item in plan.exercises
             ],
         )
+
+    def _generate_rule_based(
+        self,
+        command: GenerateWorkoutCommand,
+        goal: str,
+        training_level: str,
+        readiness_score: float,
+        readiness_recommendation: str,
+        allowed: list[Exercise],
+    ):
+        return self.generator.generate(
+            user_id=command.user_id,
+            goal=goal,
+            training_level=training_level,
+            readiness_score=int(round(readiness_score)),
+            readiness_recommendation=readiness_recommendation,
+            focus_muscle=command.focus_muscle,
+            available_time_minutes=command.available_time_minutes,
+            exercises=allowed,
+            avoid_exercises=command.avoid_exercises,
+        )
+
+    async def _generate_with_gemini(
+        self,
+        command: GenerateWorkoutCommand,
+        goal: str,
+        training_level: str,
+        readiness,
+        equipment: list[str],
+        allowed: list[Exercise],
+    ):
+        ai_allowed = self._select_ai_allowed_exercises(
+            allowed=allowed,
+            focus_muscle=command.focus_muscle,
+            avoid_exercises=command.avoid_exercises,
+        )
+        context = AIWorkoutGenerationContext(
+            user_id=command.user_id,
+            goal=goal,
+            training_level=training_level,
+            readiness_score=int(round(readiness.score)),
+            readiness_category=readiness.category.value,
+            readiness_recommendation=readiness.recommendation.value,
+            focus_muscle=command.focus_muscle,
+            available_time_minutes=command.available_time_minutes,
+            equipment=equipment,
+            avoid_exercises=command.avoid_exercises,
+            allowed_exercises=[
+                AIAllowedExercise(
+                    exercise_id=item.id,
+                    name=item.name,
+                    slug=item.slug,
+                    primary_muscle=item.muscle_group.value,
+                    equipment=item.equipment_type.value,
+                    difficulty=item.training_level.value,
+                    movement_type=item.movement_type,
+                )
+                for item in ai_allowed
+            ],
+            user_note=command.user_note,
+        )
+        result = await self.ai_generator.generate_workout(context)
+        self.ai_safety_validator.validate(result, context)
+        plan = self.ai_output_mapper.to_workout_plan(result, context)
+        return plan
+
+    def _select_ai_allowed_exercises(
+        self,
+        allowed: list[Exercise],
+        focus_muscle: str | None,
+        avoid_exercises: list[str],
+    ) -> list[Exercise]:
+        avoid_set = {item.strip().lower() for item in avoid_exercises}
+
+        def _score(item: Exercise) -> tuple[int, int, int, str]:
+            focus_match = int(
+                focus_muscle is not None and item.muscle_group.value == focus_muscle
+            )
+            bodyweight_bonus = int(
+                item.equipment_type.value == EquipmentType.BODYWEIGHT.value
+            )
+            compound_bonus = int(
+                item.movement_type in {"push", "pull", "squat", "hinge", "full_body"}
+            )
+            return (-focus_match, -compound_bonus, -bodyweight_bonus, item.name)
+
+        filtered = [
+            item
+            for item in allowed
+            if item.slug.lower() not in avoid_set and item.name.lower() not in avoid_set
+        ]
+        shortlisted = sorted(filtered, key=_score)[:AI_ALLOWED_EXERCISES_LIMIT]
+        return shortlisted or allowed[:AI_ALLOWED_EXERCISES_LIMIT]
 
     def _to_exercise_dto(
         self, item, exercise: Exercise | None

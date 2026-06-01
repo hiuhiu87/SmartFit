@@ -630,7 +630,54 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"date\": \"2026-05-31\",\n  \"focus_muscle\": \"chest\",\n  \"available_time_minutes\": 45,\n  \"equipment\": [\"dumbbell\", \"bench\", \"bodyweight\"],\n  \"avoid_exercises\": [],\n  \"user_note\": \"Feeling okay today.\"\n}"
+              "raw": "{\n  \"date\": \"2026-05-31\",\n  \"focus_muscle\": \"chest\",\n  \"available_time_minutes\": 45,\n  \"equipment\": [\"dumbbell\", \"bench\", \"bodyweight\"],\n  \"avoid_exercises\": [],\n  \"generation_mode\": \"auto\",\n  \"user_note\": \"Feeling okay today.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workouts/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workouts",
+                "generate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const workoutId = json?.data?.workout_id;",
+                  "const firstExerciseId = json?.data?.exercises?.[0]?.workout_plan_exercise_id;",
+                  "if (pm.response.code === 200 && workoutId) {",
+                  "  pm.collectionVariables.set('workoutId', workoutId);",
+                  "}",
+                  "if (pm.response.code === 200 && firstExerciseId) {",
+                  "  pm.collectionVariables.set('workoutPlanExerciseId', firstExerciseId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate Workout (Gemini)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-05-31\",\n  \"focus_muscle\": \"chest\",\n  \"available_time_minutes\": 45,\n  \"equipment\": [\"dumbbell\", \"bench\", \"bodyweight\"],\n  \"avoid_exercises\": [],\n  \"generation_mode\": \"gemini\",\n  \"user_note\": \"Feeling okay today.\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/workouts/generate",

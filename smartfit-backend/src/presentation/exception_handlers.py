@@ -5,6 +5,12 @@ from fastapi.responses import JSONResponse
 
 from app.settings import get_settings
 from src.domain.common.exceptions import (
+    AIConfigurationError,
+    AIGenerationError,
+    AIInvalidOutputError,
+    AIProviderTimeoutError,
+    AIRateLimitError,
+    AIUnsafeOutputError,
     DomainError,
     NotFoundError,
     UnauthorizedError,
@@ -42,6 +48,50 @@ def register_exception_handlers(app: FastAPI) -> None:
             content={
                 "success": False,
                 "error": {"code": "unauthorized", "message": str(exc)},
+            },
+        )
+
+    @app.exception_handler(AIRateLimitError)
+    async def handle_ai_rate_limit(_: Request, exc: AIRateLimitError) -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": {"code": "ai_rate_limit", "message": str(exc)},
+            },
+        )
+
+    @app.exception_handler(AIProviderTimeoutError)
+    async def handle_ai_timeout(_: Request, exc: AIProviderTimeoutError) -> JSONResponse:
+        return JSONResponse(
+            status_code=504,
+            content={
+                "success": False,
+                "error": {"code": "ai_timeout", "message": str(exc)},
+            },
+        )
+
+    @app.exception_handler(AIConfigurationError)
+    async def handle_ai_configuration(
+        _: Request, exc: AIConfigurationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": {"code": "ai_configuration_error", "message": str(exc)},
+            },
+        )
+
+    @app.exception_handler(AIGenerationError)
+    async def handle_ai_generation(
+        _: Request, exc: AIGenerationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=502,
+            content={
+                "success": False,
+                "error": {"code": "ai_generation_error", "message": str(exc)},
             },
         )
 

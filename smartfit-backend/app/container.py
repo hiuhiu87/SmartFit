@@ -37,13 +37,19 @@ from src.application.workout.use_cases import (
     LogWorkoutSetUseCase,
     StartWorkoutUseCase,
 )
+from src.domain.ai.ports import AIWorkoutGeneratorPort
+from src.domain.common.exceptions import AIConfigurationError
 from src.domain.readiness.services import ReadinessCalculator
 from src.domain.workout.services import (
     RuleBasedWorkoutGenerator,
     WorkoutSafetyPolicy,
     WorkoutVolumeCalculator,
 )
-from src.infrastructure.ai.ai_client import AIClient
+from src.infrastructure.ai.gemini_prompt_builder import GeminiPromptBuilder
+from src.infrastructure.ai.gemini_workout_generator import GeminiWorkoutGenerator
+from src.infrastructure.ai.output_mapper import AIWorkoutOutputMapper
+from src.infrastructure.ai.safety_validator import AIWorkoutSafetyValidator
+from src.infrastructure.ai.schema_validator import AIWorkoutSchemaValidator
 from src.infrastructure.repositories.exercise_repository import SQLModelExerciseRepository
 from src.infrastructure.repositories.health_repository import SQLModelHealthRepository
 from src.infrastructure.repositories.readiness_repository import SQLModelReadinessRepository
@@ -58,13 +64,20 @@ from src.domain.progress.services import ProgressCalculator
 class Container:
     def __init__(self) -> None:
         self.readiness_calculator = ReadinessCalculator()
-        self.ai_client = AIClient()
         self.password_hasher = PasswordHasher()
         self.jwt_provider = JWTProvider()
         self.workout_generator = RuleBasedWorkoutGenerator()
         self.workout_safety_policy = WorkoutSafetyPolicy()
         self.workout_volume_calculator = WorkoutVolumeCalculator()
         self.progress_calculator = ProgressCalculator()
+        self.gemini_prompt_builder = GeminiPromptBuilder()
+        self.ai_workout_schema_validator = AIWorkoutSchemaValidator()
+        self.ai_workout_safety_validator = AIWorkoutSafetyValidator()
+        self.ai_workout_output_mapper = AIWorkoutOutputMapper()
+        self.gemini_workout_generator_impl: AIWorkoutGeneratorPort = GeminiWorkoutGenerator(
+            self.gemini_prompt_builder,
+            self.ai_workout_schema_validator,
+        )
 
     def register_user_use_case(self, session: AsyncSession) -> RegisterUserUseCase:
         return RegisterUserUseCase(
@@ -175,8 +188,26 @@ class Container:
             exercise_repository=self.get_exercise_repository(session),
             workout_repository=self.get_workout_repository(session),
             generator=self.workout_generator,
+            ai_generator=self.get_gemini_workout_generator(),
+            ai_safety_validator=self.ai_workout_safety_validator,
+            ai_output_mapper=self.ai_workout_output_mapper,
             safety_policy=self.workout_safety_policy,
         )
+
+    def get_gemini_prompt_builder(self) -> GeminiPromptBuilder:
+        return self.gemini_prompt_builder
+
+    def get_ai_workout_schema_validator(self) -> AIWorkoutSchemaValidator:
+        return self.ai_workout_schema_validator
+
+    def get_ai_workout_safety_validator(self) -> AIWorkoutSafetyValidator:
+        return self.ai_workout_safety_validator
+
+    def get_ai_workout_output_mapper(self) -> AIWorkoutOutputMapper:
+        return self.ai_workout_output_mapper
+
+    def get_gemini_workout_generator(self) -> AIWorkoutGeneratorPort:
+        return self.gemini_workout_generator_impl
 
     def get_workout_detail_use_case(
         self, session: AsyncSession

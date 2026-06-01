@@ -19,8 +19,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
-    AI_PROVIDER: str = Field(default="openai")
+    AI_PROVIDER: str = Field(default="gemini")
     OPENAI_API_KEY: str = Field(default="")
+    GEMINI_API_KEY: str = Field(default="")
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash-lite")
+    GEMINI_TIMEOUT_SECONDS: int = Field(default=20)
+    GEMINI_MAX_OUTPUT_TOKENS: int = Field(default=1200)
     ENVIRONMENT: str = Field(default="local")
 
 

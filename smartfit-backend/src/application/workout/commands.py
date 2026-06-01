@@ -10,6 +10,7 @@ class GenerateWorkoutCommand:
     target_date: date_type
     focus_muscle: str | None
     available_time_minutes: int
+    generation_mode: str = "auto"
     equipment: list[str] = field(default_factory=list)
     avoid_exercises: list[str] = field(default_factory=list)
     user_note: str | None = None

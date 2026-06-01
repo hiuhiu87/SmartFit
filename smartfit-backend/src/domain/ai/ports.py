@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from src.domain.ai.entities import AIRequest
+from src.domain.ai.entities import AIRequest, AIWorkoutGenerationContext, AIWorkoutGenerationResult
 
 
 class AIRequestRepository(ABC):
@@ -14,7 +14,9 @@ class AIRequestRepository(ABC):
         raise NotImplementedError
 
 
-class AIClientPort(ABC):
+class AIWorkoutGeneratorPort(ABC):
     @abstractmethod
-    async def send(self, prompt: str) -> str:
+    async def generate_workout(
+        self, context: AIWorkoutGenerationContext
+    ) -> AIWorkoutGenerationResult:
         raise NotImplementedError
