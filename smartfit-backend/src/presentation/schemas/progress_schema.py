@@ -32,7 +32,9 @@ class ProgressOverviewResponseSchema(BaseModel):
     average_readiness_this_week: float | None = None
     completed_workout_days: list[date_type] = Field(default_factory=list)
     latest_completed_workout: LatestCompletedWorkoutSchema | None = None
-    muscle_distribution: list[MuscleDistributionItemSchema] = Field(default_factory=list)
+    muscle_distribution: list[MuscleDistributionItemSchema] = Field(
+        default_factory=list
+    )
 
 
 class PersonalRecordResponseSchema(BaseModel):

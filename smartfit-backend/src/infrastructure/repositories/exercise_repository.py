@@ -55,7 +55,9 @@ class SQLModelExerciseRepository(ExerciseRepository):
         if movement_type is not None:
             filters.append(ExerciseModel.movement_type == movement_type)
 
-        count_statement = select(func.count()).select_from(ExerciseModel).where(*filters)
+        count_statement = (
+            select(func.count()).select_from(ExerciseModel).where(*filters)
+        )
         count_result = await self.session.execute(count_statement)
         total = int(count_result.scalar_one())
 
@@ -75,9 +77,13 @@ class SQLModelExerciseRepository(ExerciseRepository):
         equipment: list[str],
         focus_muscle: str | None,
         level: str | None,
-        limit: int = 20,
+        limit: int = 100,
     ) -> list[Exercise]:
-        allowed_equipment = list(dict.fromkeys(equipment + (["bodyweight"] if "bodyweight" not in equipment else [])))
+        allowed_equipment = list(
+            dict.fromkeys(
+                equipment + (["bodyweight"] if "bodyweight" not in equipment else [])
+            )
+        )
         base_filters = [
             ExerciseModel.is_active.is_(True),
             ExerciseModel.equipment_type.in_(allowed_equipment),
@@ -87,20 +93,27 @@ class SQLModelExerciseRepository(ExerciseRepository):
 
         statement = select(ExerciseModel).where(*base_filters)
         if level is not None:
+            allowed_levels = ["beginner", "intermediate"]
+            if level == "intermediate":
+                allowed_levels = ["beginner", "intermediate"]
+            elif level == "advanced":
+                allowed_levels = ["beginner", "intermediate", "advanced"]
             statement_with_level = (
-                statement.where(ExerciseModel.training_level == level)
+                statement.where(ExerciseModel.training_level.in_(allowed_levels))
                 .order_by(ExerciseModel.muscle_group.asc(), ExerciseModel.name.asc())
                 .limit(limit)
             )
             level_result = await self.session.execute(statement_with_level)
-            level_items = [exercise_model_to_domain(model) for model in level_result.scalars().all()]
+            level_items = [
+                exercise_model_to_domain(model)
+                for model in level_result.scalars().all()
+            ]
             if level_items:
                 return level_items
 
-        statement = (
-            statement.order_by(ExerciseModel.muscle_group.asc(), ExerciseModel.name.asc())
-            .limit(limit)
-        )
+        statement = statement.order_by(
+            ExerciseModel.muscle_group.asc(), ExerciseModel.name.asc()
+        ).limit(limit)
         result = await self.session.execute(statement)
         return [exercise_model_to_domain(model) for model in result.scalars().all()]
 
@@ -131,7 +144,9 @@ class SQLModelExerciseRepository(ExerciseRepository):
         limit: int = 5,
     ) -> list[Exercise]:
         allowed_equipment = list(
-            dict.fromkeys(equipment + (["bodyweight"] if "bodyweight" not in equipment else []))
+            dict.fromkeys(
+                equipment + (["bodyweight"] if "bodyweight" not in equipment else [])
+            )
         )
         filters = [
             ExerciseModel.is_active.is_(True),
@@ -148,7 +163,8 @@ class SQLModelExerciseRepository(ExerciseRepository):
             )
             level_result = await self.session.execute(level_statement)
             level_items = [
-                exercise_model_to_domain(model) for model in level_result.scalars().all()
+                exercise_model_to_domain(model)
+                for model in level_result.scalars().all()
             ]
             if level_items:
                 return level_items

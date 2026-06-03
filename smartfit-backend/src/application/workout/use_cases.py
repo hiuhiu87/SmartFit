@@ -4,9 +4,16 @@ from time import perf_counter
 from uuid import UUID, uuid4
 
 from app.settings import get_settings
-from src.application.ai_usage.commands import CheckAIUsageLimitCommand, RecordAIUsageCommand
+from src.application.ai_usage.commands import (
+    CheckAIUsageLimitCommand,
+    RecordAIUsageCommand,
+)
 from src.application.ai_usage.use_cases import AIUsageService
-from src.domain.ai.entities import AIAllowedExercise, AIRequestLog, AIWorkoutGenerationContext
+from src.domain.ai.entities import (
+    AIAllowedExercise,
+    AIRequestLog,
+    AIWorkoutGenerationContext,
+)
 from src.domain.ai.ports import AIWorkoutGeneratorPort
 from src.application.workout.commands import (
     CompleteWorkoutCommand,
@@ -24,7 +31,10 @@ from src.application.workout.dto import (
     WorkoutPlanDTO,
     WorkoutSetLogDTO,
 )
-from src.application.workout.queries import GetWorkoutDetailQuery, GetWorkoutHistoryQuery
+from src.application.workout.queries import (
+    GetWorkoutDetailQuery,
+    GetWorkoutHistoryQuery,
+)
 from src.domain.common.enums import (
     DifficultyFeedback,
     EquipmentType,
@@ -106,9 +116,9 @@ class GenerateWorkoutUseCase:
 
         allowed = await self.exercise_repository.find_allowed(
             equipment=equipment,
-            focus_muscle=command.focus_muscle,
+            focus_muscle=None,
             level=profile.training_level.value,
-            limit=50,
+            limit=100,
         )
         if not allowed:
             allowed = await self.exercise_repository.find_allowed(
@@ -119,7 +129,7 @@ class GenerateWorkoutUseCase:
                 ],
                 focus_muscle=None,
                 level=profile.training_level.value,
-                limit=50,
+                limit=100,
             )
         if not allowed:
             raise ValidationError("Workout generation failed: no exercises found.")
@@ -129,13 +139,21 @@ class GenerateWorkoutUseCase:
             "readiness_score": int(round(readiness.score)),
             "readiness_category": readiness.category.value,
             "equipment": equipment,
+            "workout_split": command.workout_split,
             "focus_muscle": command.focus_muscle,
             "allowed_exercise_slugs": [item.slug for item in allowed[:16]],
         }
 
         if command.generation_mode == "rule_based":
             plan = self._generate_rule_based(
-                command, profile.primary_goal.value, profile.training_level.value, readiness.score, readiness.recommendation.value, allowed
+                command,
+                profile.primary_goal.value,
+                profile.training_level.value,
+                readiness.score,
+                readiness.recommendation.value,
+                allowed,
+                equipment,
+                profile.injuries,
             )
         elif command.generation_mode == "gemini":
             try:
@@ -209,6 +227,8 @@ class GenerateWorkoutUseCase:
                     readiness.score,
                     readiness.recommendation.value,
                     allowed,
+                    equipment,
+                    profile.injuries,
                 )
             except (
                 AIConfigurationError,
@@ -220,9 +240,12 @@ class GenerateWorkoutUseCase:
                 AIExerciseMappingError,
             ) as exc:
                 logger.warning(
-                    "Gemini workout generation failed for user %s, falling back to rule-based: %s",
+                    "Gemini workout generation failed for user %s mode=%s, falling back to rule-based. error_type=%s error=%s input_payload=%s",
                     command.user_id,
+                    command.generation_mode,
+                    exc.__class__.__name__,
                     exc,
+                    ai_input_payload,
                 )
                 plan = self._generate_rule_based(
                     command,
@@ -231,6 +254,8 @@ class GenerateWorkoutUseCase:
                     readiness.score,
                     readiness.recommendation.value,
                     allowed,
+                    equipment,
+                    profile.injuries,
                 )
         plan.target_date = command.target_date
         self.safety_policy.validate(plan, readiness_score=readiness.score)
@@ -239,9 +264,7 @@ class GenerateWorkoutUseCase:
         exercise_map = {exercise.id: exercise for exercise in allowed}
         return self._to_plan_dto(saved, exercise_map)
 
-    def _to_plan_dto(
-        self, plan, exercise_map: dict[UUID, Exercise]
-    ) -> WorkoutPlanDTO:
+    def _to_plan_dto(self, plan, exercise_map: dict[UUID, Exercise]) -> WorkoutPlanDTO:
         return WorkoutPlanDTO(
             workout_id=plan.id,
             workout_log_id=plan.workout_log_id,
@@ -268,6 +291,8 @@ class GenerateWorkoutUseCase:
         readiness_score: float,
         readiness_recommendation: str,
         allowed: list[Exercise],
+        equipment: list[str],
+        injuries: list[str],
     ):
         return self.generator.generate(
             user_id=command.user_id,
@@ -275,10 +300,13 @@ class GenerateWorkoutUseCase:
             training_level=training_level,
             readiness_score=int(round(readiness_score)),
             readiness_recommendation=readiness_recommendation,
+            workout_split=command.workout_split,
             focus_muscle=command.focus_muscle,
             available_time_minutes=command.available_time_minutes,
             exercises=allowed,
             avoid_exercises=command.avoid_exercises,
+            available_equipment=equipment,
+            injuries=injuries,
         )
 
     async def _generate_with_gemini(
@@ -293,6 +321,7 @@ class GenerateWorkoutUseCase:
         ai_allowed = self._select_ai_allowed_exercises(
             allowed=allowed,
             focus_muscle=command.focus_muscle,
+            workout_split=command.workout_split,
             avoid_exercises=command.avoid_exercises,
         )
         context = AIWorkoutGenerationContext(
@@ -302,6 +331,7 @@ class GenerateWorkoutUseCase:
             readiness_score=int(round(readiness.score)),
             readiness_category=readiness.category.value,
             readiness_recommendation=readiness.recommendation.value,
+            workout_split=command.workout_split,
             focus_muscle=command.focus_muscle,
             available_time_minutes=command.available_time_minutes,
             equipment=equipment,
@@ -320,9 +350,47 @@ class GenerateWorkoutUseCase:
             ],
             user_note=command.user_note,
         )
+        logger.info(
+            "Prepared Gemini workout context for user %s readiness=%s/%s recommendation=%s focus=%s time=%s equipment=%s allowed_slugs=%s",
+            command.user_id,
+            context.readiness_score,
+            context.readiness_category,
+            context.readiness_recommendation,
+            context.focus_muscle,
+            context.available_time_minutes,
+            context.equipment,
+            [item.slug for item in context.allowed_exercises],
+        )
         result = await self.ai_generator.generate_workout(context)
+        logger.info(
+            "Gemini workout result before safety validation for user %s title=%s decision=%s duration=%s exercises=%s",
+            command.user_id,
+            result.workout_title,
+            result.training_decision,
+            result.estimated_duration_minutes,
+            [
+                {
+                    "slug": item.exercise_slug,
+                    "sets": item.sets,
+                    "reps": item.reps,
+                    "rest_seconds": item.rest_seconds,
+                    "rpe": item.rpe,
+                }
+                for item in result.exercises
+            ],
+        )
         self.ai_safety_validator.validate(result, context)
+        logger.info(
+            "Gemini workout safety validation passed for user %s", command.user_id
+        )
         plan = self.ai_output_mapper.to_workout_plan(result, context)
+        logger.info(
+            "Gemini workout mapped to plan for user %s title=%s source=%s exercise_count=%s",
+            command.user_id,
+            plan.title,
+            plan.source.value,
+            len(plan.exercises),
+        )
         return plan
 
     async def _generate_with_gemini_with_logging(
@@ -352,6 +420,15 @@ class GenerateWorkoutUseCase:
             AIExerciseMappingError,
         ) as exc:
             latency_ms = int((perf_counter() - started) * 1000)
+            logger.warning(
+                "Gemini workout generation failed for user %s mode=%s latency_ms=%s error_type=%s error=%s input_payload=%s",
+                command.user_id,
+                command.generation_mode,
+                latency_ms,
+                exc.__class__.__name__,
+                exc,
+                input_payload,
+            )
             await self.ai_usage_service.record(
                 RecordAIUsageCommand(
                     user_id=command.user_id,
@@ -360,7 +437,11 @@ class GenerateWorkoutUseCase:
                     request_log=self._build_ai_request_log(
                         request_id=request_id,
                         command=command,
-                        status="fallback_used" if command.generation_mode == "auto" else "failed",
+                        status=(
+                            "fallback_used"
+                            if command.generation_mode == "auto"
+                            else "failed"
+                        ),
                         input_payload=input_payload,
                         output_payload={},
                         error_code=exc.__class__.__name__,
@@ -395,27 +476,42 @@ class GenerateWorkoutUseCase:
                 ),
             )
         )
+        logger.info(
+            "Gemini workout generation succeeded for user %s mode=%s latency_ms=%s output_payload=%s",
+            command.user_id,
+            command.generation_mode,
+            latency_ms,
+            output_payload,
+        )
         return plan
 
     def _select_ai_allowed_exercises(
         self,
         allowed: list[Exercise],
         focus_muscle: str | None,
+        workout_split: str,
         avoid_exercises: list[str],
     ) -> list[Exercise]:
         avoid_set = {item.strip().lower() for item in avoid_exercises}
 
-        def _score(item: Exercise) -> tuple[int, int, int, str]:
+        def _score(item: Exercise) -> tuple[int, int, int, int, str]:
             focus_match = int(
                 focus_muscle is not None and item.muscle_group.value == focus_muscle
             )
+            split_match = int(self._matches_workout_split(item, workout_split))
             bodyweight_bonus = int(
                 item.equipment_type.value == EquipmentType.BODYWEIGHT.value
             )
             compound_bonus = int(
                 item.movement_type in {"push", "pull", "squat", "hinge", "full_body"}
             )
-            return (-focus_match, -compound_bonus, -bodyweight_bonus, item.name)
+            return (
+                -split_match,
+                -focus_match,
+                -compound_bonus,
+                -bodyweight_bonus,
+                item.name,
+            )
 
         filtered = [
             item
@@ -424,6 +520,19 @@ class GenerateWorkoutUseCase:
         ]
         shortlisted = sorted(filtered, key=_score)[:AI_ALLOWED_EXERCISES_LIMIT]
         return shortlisted or allowed[:AI_ALLOWED_EXERCISES_LIMIT]
+
+    def _matches_workout_split(self, exercise: Exercise, workout_split: str) -> bool:
+        muscle = exercise.muscle_group.value
+        movement = exercise.movement_type or ""
+        if workout_split == "upper_body":
+            return muscle in {"chest", "back", "shoulders", "arms"}
+        if workout_split == "lower_body":
+            return muscle in {"legs", "core"} or movement in {"squat", "hinge"}
+        if workout_split == "push":
+            return muscle in {"chest", "shoulders", "arms"} or movement == "push"
+        if workout_split == "pull":
+            return muscle in {"back", "arms"} or movement in {"pull", "hinge"}
+        return True
 
     def _usage_date(self):
         return datetime.now(timezone.utc).date()
@@ -458,20 +567,26 @@ class GenerateWorkoutUseCase:
             latency_ms=latency_ms,
         )
 
-    def _to_exercise_dto(
-        self, item, exercise: Exercise | None
-    ) -> WorkoutExerciseDTO:
+    def _to_exercise_dto(self, item, exercise: Exercise | None) -> WorkoutExerciseDTO:
         return WorkoutExerciseDTO(
             workout_plan_exercise_id=item.id,
             exercise_id=item.exercise_id,
-            name=(item.name or exercise.name) if exercise else (item.name or "Unknown Exercise"),
+            name=(
+                (item.name or exercise.name)
+                if exercise
+                else (item.name or "Unknown Exercise")
+            ),
             order_index=item.order_index,
-            primary_muscle=(item.primary_muscle or exercise.muscle_group.value)
-            if exercise
-            else (item.primary_muscle or MuscleGroup.FULL_BODY.value),
-            equipment=(item.equipment or exercise.equipment_type.value)
-            if exercise
-            else (item.equipment or EquipmentType.BODYWEIGHT.value),
+            primary_muscle=(
+                (item.primary_muscle or exercise.muscle_group.value)
+                if exercise
+                else (item.primary_muscle or MuscleGroup.FULL_BODY.value)
+            ),
+            equipment=(
+                (item.equipment or exercise.equipment_type.value)
+                if exercise
+                else (item.equipment or EquipmentType.BODYWEIGHT.value)
+            ),
             target_sets=item.target_sets,
             target_reps=item.target_reps,
             target_weight=item.target_weight,
@@ -511,7 +626,9 @@ class GetWorkoutDetailUseCase:
             )
             by_exercise: dict[UUID, list[WorkoutSetLog]] = {}
             for set_log in set_logs:
-                by_exercise.setdefault(set_log.workout_plan_exercise_id, []).append(set_log)
+                by_exercise.setdefault(set_log.workout_plan_exercise_id, []).append(
+                    set_log
+                )
             for exercise in plan.exercises:
                 exercise.logged_sets = by_exercise.get(exercise.id, [])
 
@@ -609,12 +726,22 @@ class LogWorkoutSetUseCase:
         if plan.status != WorkoutStatus.STARTED:
             raise ValidationError("Workout must be started before logging sets.")
 
-        log = await self.workout_repository.get_workout_log_by_id(command.workout_log_id)
-        if log is None or log.user_id != command.user_id or log.workout_plan_id != command.workout_id:
+        log = await self.workout_repository.get_workout_log_by_id(
+            command.workout_log_id
+        )
+        if (
+            log is None
+            or log.user_id != command.user_id
+            or log.workout_plan_id != command.workout_id
+        ):
             raise NotFoundError("Workout log not found.")
 
         plan_exercise = next(
-            (item for item in plan.exercises if item.id == command.workout_plan_exercise_id),
+            (
+                item
+                for item in plan.exercises
+                if item.id == command.workout_plan_exercise_id
+            ),
             None,
         )
         if plan_exercise is None:
@@ -654,8 +781,14 @@ class CompleteWorkoutUseCase:
         if plan is None or plan.user_id != command.user_id:
             raise NotFoundError("Workout not found.")
 
-        log = await self.workout_repository.get_workout_log_by_id(command.workout_log_id)
-        if log is None or log.user_id != command.user_id or log.workout_plan_id != command.workout_id:
+        log = await self.workout_repository.get_workout_log_by_id(
+            command.workout_log_id
+        )
+        if (
+            log is None
+            or log.user_id != command.user_id
+            or log.workout_plan_id != command.workout_id
+        ):
             raise NotFoundError("Workout log not found.")
 
         if plan.status == WorkoutStatus.COMPLETED and log.completed_at is not None:

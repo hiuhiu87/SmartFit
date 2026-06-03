@@ -12,9 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 
-
 revision = "b8f1b2c3d4e5"
-down_revision = "e24cb468487f"
+down_revision = "486a84cd5034"
 branch_labels = None
 depends_on = None
 
@@ -46,26 +45,43 @@ def upgrade() -> None:
             sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
             sa.Column("workout_plan_id", postgresql.UUID(as_uuid=True), nullable=True),
             sa.Column("request_type", sa.String(length=50), nullable=False),
-            sa.Column("provider", sa.String(length=50), nullable=False, server_default="gemini"),
-            sa.Column("model_name", sa.String(length=100), nullable=False, server_default=""),
+            sa.Column(
+                "provider",
+                sa.String(length=50),
+                nullable=False,
+                server_default="gemini",
+            ),
+            sa.Column(
+                "model_name", sa.String(length=100), nullable=False, server_default=""
+            ),
             sa.Column("generation_mode", sa.String(length=50), nullable=True),
             sa.Column("status", sa.String(length=50), nullable=False),
             sa.Column("prompt", sa.String(length=4000), nullable=True),
             sa.Column("response", sa.String(length=12000), nullable=True),
-            sa.Column("input_payload", json_type, nullable=False, server_default=json_default),
-            sa.Column("output_payload", json_type, nullable=False, server_default=json_default),
+            sa.Column(
+                "input_payload", json_type, nullable=False, server_default=json_default
+            ),
+            sa.Column(
+                "output_payload", json_type, nullable=False, server_default=json_default
+            ),
             sa.Column("error_code", sa.String(length=100), nullable=True),
             sa.Column("error_message", sa.String(length=4000), nullable=True),
-            sa.Column("fallback_used", sa.Boolean(), nullable=False, server_default=sa.false()),
+            sa.Column(
+                "fallback_used", sa.Boolean(), nullable=False, server_default=sa.false()
+            ),
             sa.Column("latency_ms", sa.Integer(), nullable=True),
-            sa.Column("metadata", json_type, nullable=False, server_default=json_default),
+            sa.Column(
+                "metadata", json_type, nullable=False, server_default=json_default
+            ),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
             sa.ForeignKeyConstraint(["workout_plan_id"], ["workout_plans.id"]),
             sa.PrimaryKeyConstraint("id"),
         )
-        op.create_index(op.f("ix_ai_requests_user_id"), "ai_requests", ["user_id"], unique=False)
+        op.create_index(
+            op.f("ix_ai_requests_user_id"), "ai_requests", ["user_id"], unique=False
+        )
         op.create_index(
             op.f("ix_ai_requests_workout_plan_id"),
             "ai_requests",
@@ -73,15 +89,22 @@ def upgrade() -> None:
             unique=False,
         )
         op.create_index(
-            op.f("ix_ai_requests_request_type"), "ai_requests", ["request_type"], unique=False
+            op.f("ix_ai_requests_request_type"),
+            "ai_requests",
+            ["request_type"],
+            unique=False,
         )
-        op.create_index(op.f("ix_ai_requests_status"), "ai_requests", ["status"], unique=False)
+        op.create_index(
+            op.f("ix_ai_requests_status"), "ai_requests", ["status"], unique=False
+        )
     else:
         columns = {column["name"] for column in inspector.get_columns("ai_requests")}
         if "workout_plan_id" not in columns:
             op.add_column(
                 "ai_requests",
-                sa.Column("workout_plan_id", postgresql.UUID(as_uuid=True), nullable=True),
+                sa.Column(
+                    "workout_plan_id", postgresql.UUID(as_uuid=True), nullable=True
+                ),
             )
             op.create_index(
                 op.f("ix_ai_requests_workout_plan_id"),
@@ -99,12 +122,22 @@ def upgrade() -> None:
         if "provider" not in columns:
             op.add_column(
                 "ai_requests",
-                sa.Column("provider", sa.String(length=50), nullable=False, server_default="gemini"),
+                sa.Column(
+                    "provider",
+                    sa.String(length=50),
+                    nullable=False,
+                    server_default="gemini",
+                ),
             )
         if "model_name" not in columns:
             op.add_column(
                 "ai_requests",
-                sa.Column("model_name", sa.String(length=100), nullable=False, server_default=""),
+                sa.Column(
+                    "model_name",
+                    sa.String(length=100),
+                    nullable=False,
+                    server_default="",
+                ),
             )
         if "generation_mode" not in columns:
             op.add_column(
@@ -114,26 +147,47 @@ def upgrade() -> None:
         if "input_payload" not in columns:
             op.add_column(
                 "ai_requests",
-                sa.Column("input_payload", json_type, nullable=False, server_default=json_default),
+                sa.Column(
+                    "input_payload",
+                    json_type,
+                    nullable=False,
+                    server_default=json_default,
+                ),
             )
         if "output_payload" not in columns:
             op.add_column(
                 "ai_requests",
-                sa.Column("output_payload", json_type, nullable=False, server_default=json_default),
+                sa.Column(
+                    "output_payload",
+                    json_type,
+                    nullable=False,
+                    server_default=json_default,
+                ),
             )
         if "error_code" not in columns:
-            op.add_column("ai_requests", sa.Column("error_code", sa.String(length=100), nullable=True))
+            op.add_column(
+                "ai_requests",
+                sa.Column("error_code", sa.String(length=100), nullable=True),
+            )
         if "error_message" not in columns:
             op.add_column(
-                "ai_requests", sa.Column("error_message", sa.String(length=4000), nullable=True)
+                "ai_requests",
+                sa.Column("error_message", sa.String(length=4000), nullable=True),
             )
         if "fallback_used" not in columns:
             op.add_column(
                 "ai_requests",
-                sa.Column("fallback_used", sa.Boolean(), nullable=False, server_default=sa.false()),
+                sa.Column(
+                    "fallback_used",
+                    sa.Boolean(),
+                    nullable=False,
+                    server_default=sa.false(),
+                ),
             )
         if "latency_ms" not in columns:
-            op.add_column("ai_requests", sa.Column("latency_ms", sa.Integer(), nullable=True))
+            op.add_column(
+                "ai_requests", sa.Column("latency_ms", sa.Integer(), nullable=True)
+            )
 
     if "ai_chat_messages" not in tables:
         op.create_table(
@@ -159,19 +213,39 @@ def upgrade() -> None:
             sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
             sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
             sa.Column("date", sa.Date(), nullable=False),
-            sa.Column("ai_workout_count", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("ai_chat_count", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("ai_replacement_count", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("ai_weekly_report_count", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("total_ai_count", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "ai_workout_count", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "ai_chat_count", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "ai_replacement_count", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "ai_weekly_report_count",
+                sa.Integer(),
+                nullable=False,
+                server_default="0",
+            ),
+            sa.Column(
+                "total_ai_count", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("user_id", "date", name="uq_ai_usage_daily_user_date"),
         )
-        op.create_index(op.f("ix_ai_usage_daily_user_id"), "ai_usage_daily", ["user_id"], unique=False)
-        op.create_index(op.f("ix_ai_usage_daily_date"), "ai_usage_daily", ["date"], unique=False)
+        op.create_index(
+            op.f("ix_ai_usage_daily_user_id"),
+            "ai_usage_daily",
+            ["user_id"],
+            unique=False,
+        )
+        op.create_index(
+            op.f("ix_ai_usage_daily_date"), "ai_usage_daily", ["date"], unique=False
+        )
 
 
 def downgrade() -> None:
@@ -185,7 +259,9 @@ def downgrade() -> None:
         op.drop_table("ai_usage_daily")
 
     if "ai_chat_messages" in tables:
-        op.drop_index(op.f("ix_ai_chat_messages_ai_request_id"), table_name="ai_chat_messages")
+        op.drop_index(
+            op.f("ix_ai_chat_messages_ai_request_id"), table_name="ai_chat_messages"
+        )
         op.drop_table("ai_chat_messages")
 
     if "ai_requests" in tables:
@@ -214,5 +290,7 @@ def downgrade() -> None:
                 "ai_requests",
                 type_="foreignkey",
             )
-            op.drop_index(op.f("ix_ai_requests_workout_plan_id"), table_name="ai_requests")
+            op.drop_index(
+                op.f("ix_ai_requests_workout_plan_id"), table_name="ai_requests"
+            )
             op.drop_column("ai_requests", "workout_plan_id")

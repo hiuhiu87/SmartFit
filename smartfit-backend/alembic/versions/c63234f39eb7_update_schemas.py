@@ -1,16 +1,18 @@
-"""Update schemas for workout Progress Aggregation
+"""Update schemas
 
-Revision ID: e24cb468487f
-Revises: 027cef12d0fa
-Create Date: 2026-05-31 22:58:22.111515
+Revision ID: c63234f39eb7
+Revises: 7f3c9d2a1b6e
+Create Date: 2026-06-02 22:07:23.809690
 """
 
 from alembic import op
 import sqlalchemy as sa
 import sqlmodel  # noqa: F401
 
-revision = "e24cb468487f"
-down_revision = "027cef12d0fa"
+
+
+revision = 'c63234f39eb7'
+down_revision = '7f3c9d2a1b6e'
 branch_labels = None
 depends_on = None
 

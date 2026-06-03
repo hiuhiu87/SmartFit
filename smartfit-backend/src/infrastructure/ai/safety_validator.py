@@ -14,13 +14,18 @@ from src.domain.common.exceptions import (
 
 
 class AIWorkoutSafetyValidator:
+    ZERO_REST_MOVEMENTS = {"cardio", "mobility"}
+    ZERO_REST_MUSCLES = {"cardio", "mobility"}
+
     def validate(
         self,
         result: AIWorkoutGenerationResult,
         context: AIWorkoutGenerationContext,
     ) -> None:
         allowed_by_slug = {item.slug: item for item in context.allowed_exercises}
-        avoid_normalized = {item.strip().lower() for item in context.avoid_exercises if item.strip()}
+        avoid_normalized = {
+            item.strip().lower() for item in context.avoid_exercises if item.strip()
+        }
         available_equipment = set(context.equipment) | {"bodyweight"}
 
         if result.estimated_duration_minutes > context.available_time_minutes + 10:
@@ -36,21 +41,43 @@ class AIWorkoutSafetyValidator:
                 raise AIUnsafeOutputError(
                     f"AI selected unsupported equipment: {allowed.equipment}"
                 )
-            if exercise.exercise_slug.lower() in avoid_normalized or allowed.name.lower() in avoid_normalized:
+            if (
+                exercise.exercise_slug.lower() in avoid_normalized
+                or allowed.name.lower() in avoid_normalized
+            ):
                 raise AIUnsafeOutputError("AI selected an avoided exercise.")
-            if context.training_level == "beginner" and allowed.difficulty == "advanced":
+            if (
+                context.training_level == "beginner"
+                and allowed.difficulty == "advanced"
+            ):
                 raise AIUnsafeOutputError("AI selected advanced exercise for beginner.")
             if exercise.sets > 5:
                 raise AIUnsafeOutputError("AI sets exceed safety limit.")
+            if exercise.rest_seconds == 0 and not self._allows_zero_rest(allowed):
+                raise AIUnsafeOutputError(
+                    f"AI selected rest_seconds=0 for non-continuous exercise: {exercise.exercise_slug}"
+                )
 
         if context.readiness_score < 20:
             if result.training_decision not in {"recovery", "rest_day"}:
-                raise AIUnsafeOutputError("Very low readiness only allows recovery or rest_day.")
+                raise AIUnsafeOutputError(
+                    "Very low readiness only allows recovery or rest_day."
+                )
             if any(item.rpe > 3 for item in result.exercises):
-                raise AIUnsafeOutputError("Very low readiness does not allow rpe above 3.")
+                raise AIUnsafeOutputError(
+                    "Very low readiness does not allow rpe above 3."
+                )
         elif context.readiness_score < 40:
             if any(item.rpe > 7 for item in result.exercises):
                 raise AIUnsafeOutputError("Low readiness does not allow rpe above 7.")
+
+    def _allows_zero_rest(self, allowed) -> bool:
+        movement_type = (allowed.movement_type or "").strip().lower()
+        primary_muscle = (allowed.primary_muscle or "").strip().lower()
+        return (
+            movement_type in self.ZERO_REST_MOVEMENTS
+            or primary_muscle in self.ZERO_REST_MUSCLES
+        )
 
 
 class AIChatSafetyValidator:
@@ -88,14 +115,20 @@ class AIChatSafetyValidator:
         message_lower = context.user_message.lower()
 
         if any(term in reply_lower for term in self.MEDICAL_TERMS):
-            raise AIChatUnsafeOutputError("AI chat response contains medical diagnosis language.")
+            raise AIChatUnsafeOutputError(
+                "AI chat response contains medical diagnosis language."
+            )
         if any(term in reply_lower for term in self.IGNORE_PAIN_TERMS):
-            raise AIChatUnsafeOutputError("AI chat response tells the user to ignore pain.")
+            raise AIChatUnsafeOutputError(
+                "AI chat response tells the user to ignore pain."
+            )
         if any(term in reply_lower for term in self.MODIFIED_WORKOUT_TERMS):
             raise AIChatUnsafeOutputError(
                 "AI chat response incorrectly claims the workout was already changed."
             )
-        if any(term in message_lower for term in self.PAIN_TERMS) and result.intent not in {
+        if any(
+            term in message_lower for term in self.PAIN_TERMS
+        ) and result.intent not in {
             "safety_warning",
             "reduce_difficulty",
         }:

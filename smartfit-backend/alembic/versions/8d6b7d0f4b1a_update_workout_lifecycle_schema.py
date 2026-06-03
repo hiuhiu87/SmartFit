@@ -8,7 +8,6 @@ Create Date: 2026-05-31 23:20:00.000000
 from alembic import op
 import sqlalchemy as sa
 
-
 revision = "8d6b7d0f4b1a"
 down_revision = "59f0a3a6d305"
 branch_labels = None
@@ -18,15 +17,25 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "workout_logs",
-        sa.Column("total_volume", sa.Float(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "total_volume", sa.Float(), nullable=False, server_default=sa.text("0")
+        ),
     )
-    op.add_column("workout_logs", sa.Column("calories_burned", sa.Float(), nullable=True))
-    op.add_column("workout_logs", sa.Column("avg_heart_rate", sa.Float(), nullable=True))
+    op.add_column(
+        "workout_logs", sa.Column("calories_burned", sa.Float(), nullable=True)
+    )
+    op.add_column(
+        "workout_logs", sa.Column("avg_heart_rate", sa.Float(), nullable=True)
+    )
 
-    op.alter_column("workout_set_logs", "reps_completed", existing_type=sa.Integer(), nullable=True)
+    op.alter_column(
+        "workout_set_logs", "reps_completed", existing_type=sa.Integer(), nullable=True
+    )
     op.add_column(
         "workout_set_logs",
-        sa.Column("completed", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column(
+            "completed", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
     )
     op.add_column(
         "workout_set_logs",
@@ -49,7 +58,9 @@ def upgrade() -> None:
         existing_type=sa.String(length=50),
         nullable=True,
     )
-    op.add_column("workout_feedback", sa.Column("energy_after", sa.Integer(), nullable=True))
+    op.add_column(
+        "workout_feedback", sa.Column("energy_after", sa.Integer(), nullable=True)
+    )
     op.add_column(
         "workout_feedback",
         sa.Column(
@@ -81,7 +92,9 @@ def downgrade() -> None:
     )
     op.drop_column("workout_set_logs", "updated_at")
     op.drop_column("workout_set_logs", "completed")
-    op.alter_column("workout_set_logs", "reps_completed", existing_type=sa.Integer(), nullable=False)
+    op.alter_column(
+        "workout_set_logs", "reps_completed", existing_type=sa.Integer(), nullable=False
+    )
 
     op.drop_column("workout_logs", "avg_heart_rate")
     op.drop_column("workout_logs", "calories_burned")

@@ -30,7 +30,9 @@ class SQLModelProgressRepository(ProgressRepository):
         completed_date = func.date(WorkoutLogModel.completed_at)
         statement = (
             select(WorkoutLogModel, WorkoutPlanModel.title, WorkoutPlanModel.focus)
-            .join(WorkoutPlanModel, WorkoutPlanModel.id == WorkoutLogModel.workout_plan_id)
+            .join(
+                WorkoutPlanModel, WorkoutPlanModel.id == WorkoutLogModel.workout_plan_id
+            )
             .where(
                 WorkoutLogModel.user_id == user_id,
                 WorkoutLogModel.completed_at.is_not(None),
@@ -55,7 +57,9 @@ class SQLModelProgressRepository(ProgressRepository):
         statement = (
             select(func.coalesce(func.sum(WorkoutLogModel.total_volume), 0.0))
             .select_from(WorkoutLogModel)
-            .join(WorkoutPlanModel, WorkoutPlanModel.id == WorkoutLogModel.workout_plan_id)
+            .join(
+                WorkoutPlanModel, WorkoutPlanModel.id == WorkoutLogModel.workout_plan_id
+            )
             .where(
                 WorkoutLogModel.user_id == user_id,
                 WorkoutLogModel.completed_at.is_not(None),
@@ -93,16 +97,21 @@ class SQLModelProgressRepository(ProgressRepository):
                 func.coalesce(func.sum(volume_expr), 0.0),
             )
             .select_from(WorkoutLogModel)
-            .join(WorkoutPlanModel, WorkoutPlanModel.id == WorkoutLogModel.workout_plan_id)
+            .join(
+                WorkoutPlanModel, WorkoutPlanModel.id == WorkoutLogModel.workout_plan_id
+            )
             .join(
                 WorkoutSetLogModel,
                 WorkoutSetLogModel.workout_log_id == WorkoutLogModel.id,
             )
             .join(
                 WorkoutPlanExerciseModel,
-                WorkoutPlanExerciseModel.id == WorkoutSetLogModel.workout_plan_exercise_id,
+                WorkoutPlanExerciseModel.id
+                == WorkoutSetLogModel.workout_plan_exercise_id,
             )
-            .join(ExerciseModel, ExerciseModel.id == WorkoutPlanExerciseModel.exercise_id)
+            .join(
+                ExerciseModel, ExerciseModel.id == WorkoutPlanExerciseModel.exercise_id
+            )
             .where(
                 WorkoutLogModel.user_id == user_id,
                 WorkoutLogModel.completed_at.is_not(None),
@@ -143,12 +152,17 @@ class SQLModelProgressRepository(ProgressRepository):
                 WorkoutSetLogModel.reps_completed,
             )
             .select_from(WorkoutSetLogModel)
-            .join(WorkoutLogModel, WorkoutLogModel.id == WorkoutSetLogModel.workout_log_id)
+            .join(
+                WorkoutLogModel, WorkoutLogModel.id == WorkoutSetLogModel.workout_log_id
+            )
             .join(
                 WorkoutPlanExerciseModel,
-                WorkoutPlanExerciseModel.id == WorkoutSetLogModel.workout_plan_exercise_id,
+                WorkoutPlanExerciseModel.id
+                == WorkoutSetLogModel.workout_plan_exercise_id,
             )
-            .join(ExerciseModel, ExerciseModel.id == WorkoutPlanExerciseModel.exercise_id)
+            .join(
+                ExerciseModel, ExerciseModel.id == WorkoutPlanExerciseModel.exercise_id
+            )
             .where(
                 WorkoutLogModel.user_id == user_id,
                 WorkoutLogModel.completed_at.is_not(None),
@@ -175,7 +189,8 @@ class SQLModelProgressRepository(ProgressRepository):
             best_reps = max(int(row[7]) for row in exercise_rows)
             best_set_volume = max(float(row[6]) * int(row[7]) for row in exercise_rows)
             best_estimated_1rm = max(
-                round(float(row[6]) * (1 + int(row[7]) / 30), 2) for row in exercise_rows
+                round(float(row[6]) * (1 + int(row[7]) / 30), 2)
+                for row in exercise_rows
             )
 
             def score(row: tuple) -> float:

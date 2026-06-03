@@ -57,7 +57,9 @@ class CalculateReadinessUseCase:
             )
         )
         now = datetime.now(timezone.utc)
-        existing = await self.readiness_repository.get_by_date(command.user_id, command.date)
+        existing = await self.readiness_repository.get_by_date(
+            command.user_id, command.date
+        )
         saved = await self.readiness_repository.save(
             ReadinessScore(
                 id=existing.id if existing else uuid4(),
@@ -124,8 +126,12 @@ class GetTodayReadinessUseCase:
                 explanation=existing.explanation,
             )
 
-        health_summary = await self.health_repository.get_summary_by_date(user_id, today)
-        manual_checkin = await self.health_repository.get_manual_checkin_by_date(user_id, today)
+        health_summary = await self.health_repository.get_summary_by_date(
+            user_id, today
+        )
+        manual_checkin = await self.health_repository.get_manual_checkin_by_date(
+            user_id, today
+        )
         if health_summary is None and manual_checkin is None:
             raise NotFoundError("Today's readiness is not available")
         return await self.calculate_readiness_use_case.execute(

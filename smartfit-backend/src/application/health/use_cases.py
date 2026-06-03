@@ -15,8 +15,12 @@ class SaveHealthSummaryUseCase:
     def __init__(self, health_repository: HealthRepository) -> None:
         self.health_repository = health_repository
 
-    async def execute(self, user_id: UUID, command: SaveHealthSummaryCommand) -> HealthSummaryDTO:
-        existing = await self.health_repository.get_summary_by_date(user_id, command.date)
+    async def execute(
+        self, user_id: UUID, command: SaveHealthSummaryCommand
+    ) -> HealthSummaryDTO:
+        existing = await self.health_repository.get_summary_by_date(
+            user_id, command.date
+        )
         now = datetime.now(timezone.utc)
         saved = await self.health_repository.save_summary(
             HealthSummary(
@@ -50,8 +54,12 @@ class SaveManualCheckinUseCase:
     def __init__(self, health_repository: HealthRepository) -> None:
         self.health_repository = health_repository
 
-    async def execute(self, user_id: UUID, command: SaveManualCheckinCommand) -> ManualCheckinDTO:
-        existing = await self.health_repository.get_manual_checkin_by_date(user_id, command.date)
+    async def execute(
+        self, user_id: UUID, command: SaveManualCheckinCommand
+    ) -> ManualCheckinDTO:
+        existing = await self.health_repository.get_manual_checkin_by_date(
+            user_id, command.date
+        )
         now = datetime.now(timezone.utc)
         saved = await self.health_repository.save_manual_checkin(
             ManualCheckin(

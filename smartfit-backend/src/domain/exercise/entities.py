@@ -16,6 +16,11 @@ class Exercise:
     training_level: TrainingLevel = TrainingLevel.BEGINNER
     secondary_muscles: list[str] = field(default_factory=list)
     movement_type: str | None = None
+    movement_pattern: str | None = None
+    exercise_role: str | None = None
+    fatigue_level: str | None = None
+    joint_stress: str | None = None
+    substitution_group: str | None = None
     instruction: str | None = None
     safety_notes: str | None = None
     instructions: list[str] = field(default_factory=list)

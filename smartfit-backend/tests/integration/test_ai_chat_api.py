@@ -11,14 +11,29 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.container import container
 from app.main import create_app
 from src.domain.ai.entities import AIChatResult, AIChatSuggestedAction
-from src.domain.common.enums import Goal, ReadinessCategory, ReadinessRecommendation, TrainingLevel
+from src.domain.common.enums import (
+    Goal,
+    ReadinessCategory,
+    ReadinessRecommendation,
+    TrainingLevel,
+)
 from src.domain.common.exceptions import AIProviderTimeoutError
 from src.infrastructure.database.base import utcnow
-from src.infrastructure.database.models.ai_model import AIChatMessageModel, AIRequestModel
+from src.infrastructure.database.models.ai_model import (
+    AIChatMessageModel,
+    AIRequestModel,
+)
 from src.infrastructure.database.models.ai_model import AIUsageDailyModel
-from src.infrastructure.database.models.exercise_model import ExerciseAlternativeModel, ExerciseModel
+from src.infrastructure.database.models.exercise_model import (
+    ExerciseAlternativeModel,
+    ExerciseModel,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
-from src.infrastructure.database.models.user_model import UserEquipmentModel, UserModel, UserProfileModel
+from src.infrastructure.database.models.user_model import (
+    UserEquipmentModel,
+    UserModel,
+    UserProfileModel,
+)
 from src.infrastructure.database.models.workout_model import (
     WorkoutFeedbackModel,
     WorkoutLogModel,
@@ -47,8 +62,12 @@ class FakeChatGenerator:
 @pytest_asyncio.fixture
 async def ai_chat_context(tmp_path: Path):
     db_path = tmp_path / "ai_chat_test.sqlite3"
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}", future=True, echo=False)
-    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{db_path}", future=True, echo=False
+    )
+    session_factory = async_sessionmaker(
+        bind=engine, class_=AsyncSession, expire_on_commit=False
+    )
 
     async with engine.begin() as connection:
         await connection.run_sync(
@@ -104,7 +123,10 @@ async def _register_and_login(client: AsyncClient, email: str) -> tuple[str, str
         "/api/v1/auth/login",
         json={"email": email, "password": "password123"},
     )
-    return register_response.json()["data"]["id"], login_response.json()["data"]["access_token"]
+    return (
+        register_response.json()["data"]["id"],
+        login_response.json()["data"]["access_token"],
+    )
 
 
 async def _seed_profile_and_readiness(
@@ -178,7 +200,9 @@ async def _get_exercise_id_by_slug(
     session_factory: async_sessionmaker[AsyncSession], slug: str
 ) -> str:
     async with session_factory() as session:
-        result = await session.execute(select(ExerciseModel).where(ExerciseModel.slug == slug))
+        result = await session.execute(
+            select(ExerciseModel).where(ExerciseModel.slug == slug)
+        )
         model = result.scalar_one()
         return str(model.id)
 
@@ -186,7 +210,9 @@ async def _get_exercise_id_by_slug(
 @pytest.mark.asyncio
 async def test_ai_chat_replace_exercise_success(ai_chat_context) -> None:
     app = ai_chat_context["app"]
-    replacement_id = await _get_exercise_id_by_slug(ai_chat_context["session_factory"], "push-up")
+    replacement_id = await _get_exercise_id_by_slug(
+        ai_chat_context["session_factory"], "push-up"
+    )
     container.gemini_ai_chat_generator_impl = FakeChatGenerator(
         result=AIChatResult(
             reply="You can switch to Push-Up for 3 sets of 10-12 reps with 75 seconds rest.",
@@ -203,8 +229,12 @@ async def test_ai_chat_replace_exercise_success(ai_chat_context) -> None:
             ),
         )
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.chat.replace@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.chat.replace@example.com"
+        )
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
         current_exercise_id = workout["exercises"][0]["workout_plan_exercise_id"]
@@ -229,7 +259,9 @@ async def test_ai_chat_replace_exercise_success(ai_chat_context) -> None:
 @pytest.mark.asyncio
 async def test_ai_chat_does_not_auto_apply_replacement(ai_chat_context) -> None:
     app = ai_chat_context["app"]
-    replacement_id = await _get_exercise_id_by_slug(ai_chat_context["session_factory"], "push-up")
+    replacement_id = await _get_exercise_id_by_slug(
+        ai_chat_context["session_factory"], "push-up"
+    )
     container.gemini_ai_chat_generator_impl = FakeChatGenerator(
         result=AIChatResult(
             reply="Use Push-Up instead for now.",
@@ -246,8 +278,12 @@ async def test_ai_chat_does_not_auto_apply_replacement(ai_chat_context) -> None:
             ),
         )
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.chat.noapply@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.chat.noapply@example.com"
+        )
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
         current_exercise_id = workout["exercises"][0]["workout_plan_exercise_id"]
@@ -266,7 +302,10 @@ async def test_ai_chat_does_not_auto_apply_replacement(ai_chat_context) -> None:
         )
 
     assert detail.status_code == 200
-    assert detail.json()["data"]["exercises"][0]["workout_plan_exercise_id"] == current_exercise_id
+    assert (
+        detail.json()["data"]["exercises"][0]["workout_plan_exercise_id"]
+        == current_exercise_id
+    )
 
 
 @pytest.mark.asyncio
@@ -279,7 +318,9 @@ async def test_ai_chat_pain_message_returns_safety_warning(ai_chat_context) -> N
             suggested_action=None,
         )
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         user_id, token = await _register_and_login(client, "ai.chat.pain@example.com")
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
@@ -288,7 +329,9 @@ async def test_ai_chat_pain_message_returns_safety_warning(ai_chat_context) -> N
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0]["workout_plan_exercise_id"],
+                "current_workout_plan_exercise_id": workout["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "message": "My shoulder hurts during this exercise.",
             },
         )
@@ -316,8 +359,12 @@ async def test_ai_chat_blocks_unknown_replacement_id(ai_chat_context) -> None:
             ),
         )
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.chat.unknown@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.chat.unknown@example.com"
+        )
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
         response = await client.post(
@@ -325,7 +372,9 @@ async def test_ai_chat_blocks_unknown_replacement_id(ai_chat_context) -> None:
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0]["workout_plan_exercise_id"],
+                "current_workout_plan_exercise_id": workout["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "message": "Need another option.",
             },
         )
@@ -335,7 +384,9 @@ async def test_ai_chat_blocks_unknown_replacement_id(ai_chat_context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ai_chat_user_cannot_chat_about_other_user_workout(ai_chat_context) -> None:
+async def test_ai_chat_user_cannot_chat_about_other_user_workout(
+    ai_chat_context,
+) -> None:
     app = ai_chat_context["app"]
     container.gemini_ai_chat_generator_impl = FakeChatGenerator(
         result=AIChatResult(
@@ -344,9 +395,15 @@ async def test_ai_chat_user_cannot_chat_about_other_user_workout(ai_chat_context
             suggested_action=None,
         )
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_a_id, token_a = await _register_and_login(client, "ai.chat.owner.a@example.com")
-        user_b_id, token_b = await _register_and_login(client, "ai.chat.owner.b@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_a_id, token_a = await _register_and_login(
+            client, "ai.chat.owner.a@example.com"
+        )
+        user_b_id, token_b = await _register_and_login(
+            client, "ai.chat.owner.b@example.com"
+        )
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_a_id)
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_b_id)
         workout = await _generate_and_start_workout(client, token_a)
@@ -355,7 +412,9 @@ async def test_ai_chat_user_cannot_chat_about_other_user_workout(ai_chat_context
             headers={"Authorization": f"Bearer {token_b}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0]["workout_plan_exercise_id"],
+                "current_workout_plan_exercise_id": workout["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "message": "What should I do instead?",
             },
         )
@@ -366,7 +425,9 @@ async def test_ai_chat_user_cannot_chat_about_other_user_workout(ai_chat_context
 @pytest.mark.asyncio
 async def test_ai_chat_message_saved(ai_chat_context) -> None:
     app = ai_chat_context["app"]
-    replacement_id = await _get_exercise_id_by_slug(ai_chat_context["session_factory"], "push-up")
+    replacement_id = await _get_exercise_id_by_slug(
+        ai_chat_context["session_factory"], "push-up"
+    )
     container.gemini_ai_chat_generator_impl = FakeChatGenerator(
         result=AIChatResult(
             reply="Switch to Push-Up.",
@@ -383,7 +444,9 @@ async def test_ai_chat_message_saved(ai_chat_context) -> None:
             ),
         )
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         user_id, token = await _register_and_login(client, "ai.chat.saved@example.com")
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
@@ -392,7 +455,9 @@ async def test_ai_chat_message_saved(ai_chat_context) -> None:
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0]["workout_plan_exercise_id"],
+                "current_workout_plan_exercise_id": workout["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "message": "Need a swap.",
             },
         )
@@ -415,7 +480,9 @@ async def test_ai_chat_empty_message_validation(ai_chat_context) -> None:
     container.gemini_ai_chat_generator_impl = FakeChatGenerator(
         result=AIChatResult(reply="ok", intent="general_workout_question")
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         user_id, token = await _register_and_login(client, "ai.chat.empty@example.com")
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
@@ -437,7 +504,9 @@ async def test_ai_chat_gemini_failure_returns_safe_fallback(ai_chat_context) -> 
     container.gemini_ai_chat_generator_impl = FakeChatGenerator(
         exc=AIProviderTimeoutError("timeout")
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         user_id, token = await _register_and_login(client, "ai.chat.fail@example.com")
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
@@ -446,7 +515,9 @@ async def test_ai_chat_gemini_failure_returns_safe_fallback(ai_chat_context) -> 
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0]["workout_plan_exercise_id"],
+                "current_workout_plan_exercise_id": workout["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "message": "The machine is busy.",
             },
         )
@@ -458,7 +529,9 @@ async def test_ai_chat_gemini_failure_returns_safe_fallback(ai_chat_context) -> 
 @pytest.mark.asyncio
 async def test_ai_chat_history_returns_saved_messages(ai_chat_context) -> None:
     app = ai_chat_context["app"]
-    replacement_id = await _get_exercise_id_by_slug(ai_chat_context["session_factory"], "push-up")
+    replacement_id = await _get_exercise_id_by_slug(
+        ai_chat_context["session_factory"], "push-up"
+    )
     container.gemini_ai_chat_generator_impl = FakeChatGenerator(
         result=AIChatResult(
             reply="Use Push-Up instead.",
@@ -475,8 +548,12 @@ async def test_ai_chat_history_returns_saved_messages(ai_chat_context) -> None:
             ),
         )
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.chat.history@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.chat.history@example.com"
+        )
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
         await client.post(
@@ -484,7 +561,9 @@ async def test_ai_chat_history_returns_saved_messages(ai_chat_context) -> None:
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0]["workout_plan_exercise_id"],
+                "current_workout_plan_exercise_id": workout["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "message": "Need a replacement.",
             },
         )
@@ -502,14 +581,22 @@ async def test_ai_chat_history_returns_saved_messages(ai_chat_context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ai_chat_history_user_cannot_access_other_user_workout(ai_chat_context) -> None:
+async def test_ai_chat_history_user_cannot_access_other_user_workout(
+    ai_chat_context,
+) -> None:
     app = ai_chat_context["app"]
     container.gemini_ai_chat_generator_impl = FakeChatGenerator(
         result=AIChatResult(reply="ok", intent="general_workout_question")
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_a_id, token_a = await _register_and_login(client, "ai.chat.history.owner.a@example.com")
-        user_b_id, token_b = await _register_and_login(client, "ai.chat.history.owner.b@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_a_id, token_a = await _register_and_login(
+            client, "ai.chat.history.owner.a@example.com"
+        )
+        user_b_id, token_b = await _register_and_login(
+            client, "ai.chat.history.owner.b@example.com"
+        )
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_a_id)
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_b_id)
         workout = await _generate_and_start_workout(client, token_a)

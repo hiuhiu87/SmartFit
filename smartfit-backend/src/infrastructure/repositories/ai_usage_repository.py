@@ -12,7 +12,10 @@ from src.infrastructure.database.mapper import (
     ai_request_log_domain_to_model,
     ai_usage_daily_model_to_domain,
 )
-from src.infrastructure.database.models.ai_model import AIRequestModel, AIUsageDailyModel
+from src.infrastructure.database.models.ai_model import (
+    AIRequestModel,
+    AIUsageDailyModel,
+)
 
 
 class SQLModelAIUsageRepository(AIUsageRepository):
@@ -42,7 +45,9 @@ class SQLModelAIUsageRepository(AIUsageRepository):
         model = result.scalar_one_or_none()
         now = datetime.now(timezone.utc)
         if model is None:
-            model = AIUsageDailyModel(user_id=user_id, date=target_date, created_at=now, updated_at=now)
+            model = AIUsageDailyModel(
+                user_id=user_id, date=target_date, created_at=now, updated_at=now
+            )
             self.session.add(model)
 
         if request_type == "generate_workout":
@@ -79,6 +84,9 @@ class SQLModelAIUsageRepository(AIUsageRepository):
             model.provider = log.provider
             model.model_name = log.model_name
             model.generation_mode = log.generation_mode
+            # Keep compatibility with databases where these legacy columns are NOT NULL.
+            model.prompt = log.prompt or ""
+            model.response = log.response or ""
             model.input_payload = log.input_payload or {}
             model.output_payload = log.output_payload or {}
             model.status = log.status
@@ -86,6 +94,7 @@ class SQLModelAIUsageRepository(AIUsageRepository):
             model.error_message = log.error_message
             model.fallback_used = log.fallback_used
             model.latency_ms = log.latency_ms
+            model.request_metadata = log.metadata or {}
             model.updated_at = utcnow()
         await self.session.flush()
         log.id = model.id
@@ -98,6 +107,8 @@ class SQLModelAIUsageRepository(AIUsageRepository):
             provider=model.provider,
             model_name=model.model_name,
             generation_mode=model.generation_mode,
+            prompt=model.prompt,
+            response=model.response,
             input_payload=dict(model.input_payload or {}),
             output_payload=dict(model.output_payload or {}),
             status=model.status,
@@ -105,5 +116,6 @@ class SQLModelAIUsageRepository(AIUsageRepository):
             error_message=model.error_message,
             fallback_used=model.fallback_used,
             latency_ms=model.latency_ms,
+            metadata=dict(model.request_metadata or {}),
             created_at=model.created_at,
         )

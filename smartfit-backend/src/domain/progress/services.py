@@ -2,7 +2,9 @@ from src.domain.progress.entities import MuscleDistributionItem, ProgressOvervie
 
 
 class ProgressCalculator:
-    def calculate_consistency(self, completed_count: int, target_count: int | None) -> int:
+    def calculate_consistency(
+        self, completed_count: int, target_count: int | None
+    ) -> int:
         if not target_count or target_count <= 0:
             return 0
         return round(completed_count / target_count * 100)
@@ -45,14 +47,19 @@ class ProgressCalculator:
         ]
 
         if overview.muscle_distribution:
-            top = max(overview.muscle_distribution, key=lambda item: item.volume or item.set_count)
+            top = max(
+                overview.muscle_distribution,
+                key=lambda item: item.volume or item.set_count,
+            )
             highlights.append(
                 f"{top.muscle.replace('_', ' ').title()} was your most trained muscle group."
             )
 
         suggestions: list[str] = []
         if overview.weekly_workout_target > overview.weekly_workouts_completed:
-            remaining = overview.weekly_workout_target - overview.weekly_workouts_completed
+            remaining = (
+                overview.weekly_workout_target - overview.weekly_workouts_completed
+            )
             suggestions.append(
                 f"Try to complete {remaining} more workout next week to reach your target."
                 if remaining == 1
@@ -61,11 +68,16 @@ class ProgressCalculator:
         else:
             suggestions.append("Maintain your current training consistency next week.")
 
-        if overview.latest_completed_workout and overview.latest_completed_workout.total_volume > 0:
+        if (
+            overview.latest_completed_workout
+            and overview.latest_completed_workout.total_volume > 0
+        ):
             suggestions.append(
                 "Consider placing a rest day after your highest-volume session."
             )
         else:
-            suggestions.append("Log your sets consistently to improve progress tracking.")
+            suggestions.append(
+                "Log your sets consistently to improve progress tracking."
+            )
 
         return highlights, suggestions

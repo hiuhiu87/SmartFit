@@ -8,7 +8,11 @@ from app.container import container
 from src.application.exercise.queries import GetExerciseByIdQuery, ListExercisesQuery
 from src.infrastructure.database.session import get_session
 from src.presentation.schemas.common_schema import APIResponseSchema
-from src.presentation.schemas.exercise_schema import ExerciseListDataSchema, ExerciseResponseSchema, ReplaceExerciseRequestSchema
+from src.presentation.schemas.exercise_schema import (
+    ExerciseListDataSchema,
+    ExerciseResponseSchema,
+    ReplaceExerciseRequestSchema,
+)
 
 router = APIRouter(prefix="/exercises", tags=["exercises"])
 
@@ -53,7 +57,9 @@ async def get_exercise_by_id(
     result = await container.get_exercise_by_id_use_case(session).execute(
         GetExerciseByIdQuery(exercise_id=exercise_id)
     )
-    return APIResponseSchema(data=ExerciseResponseSchema(**{**asdict(result), "id": str(result.id)}))
+    return APIResponseSchema(
+        data=ExerciseResponseSchema(**{**asdict(result), "id": str(result.id)})
+    )
 
 
 @router.post("/replace", response_model=APIResponseSchema[dict])

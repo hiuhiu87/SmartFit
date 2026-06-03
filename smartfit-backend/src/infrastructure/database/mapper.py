@@ -24,7 +24,10 @@ from src.domain.workout.entities import (
 )
 from src.infrastructure.database.base import utcnow
 from src.infrastructure.database.models.exercise_model import ExerciseModel
-from src.infrastructure.database.models.ai_model import AIRequestModel, AIUsageDailyModel
+from src.infrastructure.database.models.ai_model import (
+    AIRequestModel,
+    AIUsageDailyModel,
+)
 from src.infrastructure.database.models.health_model import (
     HealthSummaryModel,
     ManualCheckinModel,
@@ -195,6 +198,7 @@ def readiness_score_domain_to_model(entity: ReadinessScore) -> ReadinessScoreMod
 
 
 def exercise_model_to_domain(model: ExerciseModel) -> Exercise:
+    metadata = dict(model.exercise_metadata)
     return Exercise(
         id=model.id,
         slug=model.slug,
@@ -205,10 +209,16 @@ def exercise_model_to_domain(model: ExerciseModel) -> Exercise:
         training_level=TrainingLevel(model.training_level),
         secondary_muscles=list(model.secondary_muscles or []),
         movement_type=model.movement_type,
+        movement_pattern=model.movement_pattern or metadata.get("movement_pattern"),
+        exercise_role=model.exercise_role or metadata.get("exercise_role"),
+        fatigue_level=model.fatigue_level or metadata.get("fatigue_level"),
+        joint_stress=model.joint_stress or metadata.get("joint_stress"),
+        substitution_group=model.substitution_group
+        or metadata.get("substitution_group"),
         instruction=model.instruction,
         safety_notes=model.safety_notes,
         instructions=list(model.instructions),
-        metadata=dict(model.exercise_metadata),
+        metadata=metadata,
         is_active=model.is_active,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -226,6 +236,11 @@ def exercise_domain_to_model(entity: Exercise) -> ExerciseModel:
         training_level=entity.training_level.value,
         secondary_muscles=entity.secondary_muscles,
         movement_type=entity.movement_type,
+        movement_pattern=entity.movement_pattern,
+        exercise_role=entity.exercise_role,
+        fatigue_level=entity.fatigue_level,
+        joint_stress=entity.joint_stress,
+        substitution_group=entity.substitution_group,
         instruction=entity.instruction,
         safety_notes=entity.safety_notes,
         instructions=entity.instructions,
@@ -438,15 +453,16 @@ def ai_request_log_domain_to_model(entity: AIRequestLog) -> AIRequestModel:
         model_name=entity.model_name,
         generation_mode=entity.generation_mode,
         status=entity.status,
-        prompt=None,
-        response=None,
+        # Older Postgres schemas still enforce NOT NULL on these legacy columns.
+        prompt=entity.prompt or "",
+        response=entity.response or "",
         input_payload=entity.input_payload or {},
         output_payload=entity.output_payload or {},
         error_code=entity.error_code,
         error_message=entity.error_message,
         fallback_used=entity.fallback_used,
         latency_ms=entity.latency_ms,
-        request_metadata={},
+        request_metadata=entity.metadata or {},
         created_at=created_at,
         updated_at=created_at,
     )

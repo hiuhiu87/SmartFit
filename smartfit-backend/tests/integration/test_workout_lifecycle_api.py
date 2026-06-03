@@ -29,7 +29,12 @@ from src.infrastructure.database.models.workout_model import (
 )
 from src.infrastructure.database.session import get_session
 from src.infrastructure.seed.seed_exercises import _seed_rows
-from src.domain.common.enums import Goal, ReadinessCategory, ReadinessRecommendation, TrainingLevel
+from src.domain.common.enums import (
+    Goal,
+    ReadinessCategory,
+    ReadinessRecommendation,
+    TrainingLevel,
+)
 
 
 @pytest_asyncio.fixture
@@ -159,8 +164,12 @@ async def _generate_workout(client: AsyncClient, token: str) -> dict:
 async def test_get_workout_detail_success(workout_lifecycle_context) -> None:
     app = workout_lifecycle_context["app"]
     session_factory = workout_lifecycle_context["session_factory"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.detail@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.detail@example.com"
+        )
         await _seed_profile_and_readiness(session_factory, user_id)
         generated = await _generate_workout(client, token)
         response = await client.get(
@@ -177,9 +186,15 @@ async def test_get_workout_detail_success(workout_lifecycle_context) -> None:
 @pytest.mark.asyncio
 async def test_start_workout_success(workout_lifecycle_context) -> None:
     app = workout_lifecycle_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.start@example.com")
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_id)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.start@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
         generated = await _generate_workout(client, token)
         response = await client.post(
             f"/api/v1/workouts/{generated['workout_id']}/start",
@@ -196,9 +211,15 @@ async def test_start_workout_success(workout_lifecycle_context) -> None:
 @pytest.mark.asyncio
 async def test_start_workout_idempotent(workout_lifecycle_context) -> None:
     app = workout_lifecycle_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.start.idempotent@example.com")
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_id)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.start.idempotent@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
         generated = await _generate_workout(client, token)
         first = await client.post(
             f"/api/v1/workouts/{generated['workout_id']}/start",
@@ -213,15 +234,24 @@ async def test_start_workout_idempotent(workout_lifecycle_context) -> None:
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert first.json()["data"]["workout_log_id"] == second.json()["data"]["workout_log_id"]
+    assert (
+        first.json()["data"]["workout_log_id"]
+        == second.json()["data"]["workout_log_id"]
+    )
 
 
 @pytest.mark.asyncio
 async def test_log_set_success(workout_lifecycle_context) -> None:
     app = workout_lifecycle_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.logset@example.com")
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_id)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.logset@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
         generated = await _generate_workout(client, token)
         started = await client.post(
             f"/api/v1/workouts/{generated['workout_id']}/start",
@@ -252,8 +282,12 @@ async def test_log_set_success(workout_lifecycle_context) -> None:
 async def test_log_set_upsert_same_set_number(workout_lifecycle_context) -> None:
     app = workout_lifecycle_context["app"]
     session_factory = workout_lifecycle_context["session_factory"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.upsertset@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.upsertset@example.com"
+        )
         await _seed_profile_and_readiness(session_factory, user_id)
         generated = await _generate_workout(client, token)
         started = await client.post(
@@ -292,13 +326,9 @@ async def test_log_set_upsert_same_set_number(workout_lifecycle_context) -> None
 
     async with session_factory() as session:
         total = (
-            await session.execute(
-                select(func.count()).select_from(WorkoutSetLogModel)
-            )
+            await session.execute(select(func.count()).select_from(WorkoutSetLogModel))
         ).scalar_one()
-        saved = (
-            await session.execute(select(WorkoutSetLogModel))
-        ).scalars().one()
+        saved = (await session.execute(select(WorkoutSetLogModel))).scalars().one()
 
     assert total == 1
     assert saved.reps_completed == 12
@@ -308,16 +338,24 @@ async def test_log_set_upsert_same_set_number(workout_lifecycle_context) -> None
 @pytest.mark.asyncio
 async def test_cannot_log_set_before_start(workout_lifecycle_context) -> None:
     app = workout_lifecycle_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.beforestart@example.com")
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_id)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.beforestart@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
         generated = await _generate_workout(client, token)
         response = await client.post(
             f"/api/v1/workouts/{generated['workout_id']}/sets",
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_log_id": generated["workout_id"],
-                "workout_plan_exercise_id": generated["exercises"][0]["workout_plan_exercise_id"],
+                "workout_plan_exercise_id": generated["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "set_number": 1,
                 "weight": 20,
                 "reps": 10,
@@ -330,11 +368,19 @@ async def test_cannot_log_set_before_start(workout_lifecycle_context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_complete_workout_success_and_volume_calculated(workout_lifecycle_context) -> None:
+async def test_complete_workout_success_and_volume_calculated(
+    workout_lifecycle_context,
+) -> None:
     app = workout_lifecycle_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.complete@example.com")
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_id)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.complete@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
         generated = await _generate_workout(client, token)
         started = await client.post(
             f"/api/v1/workouts/{generated['workout_id']}/start",
@@ -382,11 +428,19 @@ async def test_complete_workout_success_and_volume_calculated(workout_lifecycle_
 
 
 @pytest.mark.asyncio
-async def test_cannot_complete_generated_workout_before_start(workout_lifecycle_context) -> None:
+async def test_cannot_complete_generated_workout_before_start(
+    workout_lifecycle_context,
+) -> None:
     app = workout_lifecycle_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.complete.beforestart@example.com")
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_id)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.complete.beforestart@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
         generated = await _generate_workout(client, token)
         response = await client.post(
             f"/api/v1/workouts/{generated['workout_id']}/complete",
@@ -402,11 +456,19 @@ async def test_cannot_complete_generated_workout_before_start(workout_lifecycle_
 
 
 @pytest.mark.asyncio
-async def test_get_workout_history_returns_completed_workout(workout_lifecycle_context) -> None:
+async def test_get_workout_history_returns_completed_workout(
+    workout_lifecycle_context,
+) -> None:
     app = workout_lifecycle_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "lifecycle.history@example.com")
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_id)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.history@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
         generated = await _generate_workout(client, token)
         started = await client.post(
             f"/api/v1/workouts/{generated['workout_id']}/start",
@@ -451,11 +513,21 @@ async def test_get_workout_history_returns_completed_workout(workout_lifecycle_c
 @pytest.mark.asyncio
 async def test_user_cannot_access_other_user_workout(workout_lifecycle_context) -> None:
     app = workout_lifecycle_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_a_id, token_a = await _register_and_login(client, "lifecycle.owner.a@example.com")
-        user_b_id, token_b = await _register_and_login(client, "lifecycle.owner.b@example.com")
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_a_id)
-        await _seed_profile_and_readiness(workout_lifecycle_context["session_factory"], user_b_id)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_a_id, token_a = await _register_and_login(
+            client, "lifecycle.owner.a@example.com"
+        )
+        user_b_id, token_b = await _register_and_login(
+            client, "lifecycle.owner.b@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_a_id
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_b_id
+        )
         generated = await _generate_workout(client, token_a)
 
         get_response = await client.get(

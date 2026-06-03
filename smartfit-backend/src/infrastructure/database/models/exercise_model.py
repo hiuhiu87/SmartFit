@@ -26,6 +26,11 @@ class ExerciseModel(SQLModel, table=True):
         default_factory=list, sa_column=Column(PORTABLE_JSON, nullable=False)
     )
     movement_type: str | None = Field(default=None, index=True, max_length=50)
+    movement_pattern: str | None = Field(default=None, index=True, max_length=50)
+    exercise_role: str | None = Field(default=None, index=True, max_length=50)
+    fatigue_level: str | None = Field(default=None, index=True, max_length=50)
+    joint_stress: str | None = Field(default=None, index=True, max_length=50)
+    substitution_group: str | None = Field(default=None, index=True, max_length=100)
     instruction: str | None = Field(default=None, max_length=4000)
     safety_notes: str | None = Field(default=None, max_length=4000)
     instructions: list[str] = Field(

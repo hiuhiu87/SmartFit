@@ -135,7 +135,9 @@ class SQLModelUserRepository(UserRepository):
         return equipment
 
     async def get_preference(self, user_id: UUID) -> UserPreference | None:
-        statement = select(UserPreferenceModel).where(UserPreferenceModel.user_id == user_id)
+        statement = select(UserPreferenceModel).where(
+            UserPreferenceModel.user_id == user_id
+        )
         result = await self.session.execute(statement)
         model = result.scalar_one_or_none()
         if model is None:

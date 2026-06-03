@@ -8,7 +8,10 @@ from src.domain.ai.entities import AIChatHistoryItem, AIChatMessage, AIRequest
 from src.domain.ai.ports import AIRequestRepository
 from src.domain.common.enums import AIRequestStatus, AIRequestType
 from src.infrastructure.database.base import utcnow
-from src.infrastructure.database.models.ai_model import AIChatMessageModel, AIRequestModel
+from src.infrastructure.database.models.ai_model import (
+    AIChatMessageModel,
+    AIRequestModel,
+)
 
 
 class SQLModelAIRequestRepository(AIRequestRepository):
@@ -103,9 +106,11 @@ class SQLModelAIRequestRepository(AIRequestRepository):
                 latency_ms=None,
                 metadata={
                     "workout_id": str(workout_plan_id),
-                    "workout_plan_exercise_id": str(workout_plan_exercise_id)
-                    if workout_plan_exercise_id
-                    else None,
+                    "workout_plan_exercise_id": (
+                        str(workout_plan_exercise_id)
+                        if workout_plan_exercise_id
+                        else None
+                    ),
                     "suggested_action": suggested_action,
                 },
                 created_at=utcnow(),
@@ -114,7 +119,9 @@ class SQLModelAIRequestRepository(AIRequestRepository):
             saved_request = await self.save(request)
             ai_request_id = saved_request.id
         else:
-            request_statement = select(AIRequestModel).where(AIRequestModel.id == ai_request_id)
+            request_statement = select(AIRequestModel).where(
+                AIRequestModel.id == ai_request_id
+            )
             request_result = await self.session.execute(request_statement)
             request_model = request_result.scalar_one_or_none()
             if request_model is not None:

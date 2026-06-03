@@ -32,6 +32,7 @@ class EquipmentType(StrEnum):
     PULL_UP_BAR = "pull_up_bar"
     RESISTANCE_BAND = "resistance_band"
     TREADMILL = "treadmill"
+    BIKE = "bike"
     BODYWEIGHT = "bodyweight"
     NONE = "none"
 
@@ -44,6 +45,10 @@ class MuscleGroup(StrEnum):
     ARMS = "arms"
     CORE = "core"
     FULL_BODY = "full_body"
+    UPPER_BODY = "upper_body"
+    UPPER_BODY_PULL = "upper_body_pull"
+    UPPER_BODY_PUSH = "upper_body_push"
+    LOWER_BODY = "lower_body"
     CARDIO = "cardio"
     MOBILITY = "mobility"
 

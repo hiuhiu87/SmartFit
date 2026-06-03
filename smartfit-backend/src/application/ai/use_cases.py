@@ -12,7 +12,10 @@ from src.application.ai.dto import (
     AIChatSuggestedActionDTO,
 )
 from src.application.ai.queries import GetAIChatHistoryQuery
-from src.application.ai_usage.commands import CheckAIUsageLimitCommand, RecordAIUsageCommand
+from src.application.ai_usage.commands import (
+    CheckAIUsageLimitCommand,
+    RecordAIUsageCommand,
+)
 from src.application.ai_usage.use_cases import AIUsageService
 from app.settings import get_settings
 from src.domain.ai.entities import AIChatContext, AIChatResult, AIRequestLog
@@ -85,7 +88,9 @@ class AIChatUseCase:
         if len(message) > 1000:
             raise ValidationError("Message is too long.")
 
-        workout = await self.workout_repository.get_plan_detail_by_id(command.workout_id)
+        workout = await self.workout_repository.get_plan_detail_by_id(
+            command.workout_id
+        )
         if workout is None or workout.user_id != command.user_id:
             raise NotFoundError("Workout not found.")
 
@@ -134,17 +139,25 @@ class AIChatUseCase:
         input_payload = {
             "message": message,
             "workout_id": str(command.workout_id),
-            "current_workout_plan_exercise_id": str(command.current_workout_plan_exercise_id)
-            if command.current_workout_plan_exercise_id
-            else None,
-            "readiness_score": context.readiness_summary.get("score")
-            if context.readiness_summary
-            else None,
-            "readiness_category": context.readiness_summary.get("category")
-            if context.readiness_summary
-            else None,
+            "current_workout_plan_exercise_id": (
+                str(command.current_workout_plan_exercise_id)
+                if command.current_workout_plan_exercise_id
+                else None
+            ),
+            "readiness_score": (
+                context.readiness_summary.get("score")
+                if context.readiness_summary
+                else None
+            ),
+            "readiness_category": (
+                context.readiness_summary.get("category")
+                if context.readiness_summary
+                else None
+            ),
             "available_replacement_ids": [
-                str(item["exercise_id"]) for item in replacements if item.get("exercise_id")
+                str(item["exercise_id"])
+                for item in replacements
+                if item.get("exercise_id")
             ],
         }
         try:
@@ -357,10 +370,12 @@ class AIChatUseCase:
             current_workout_plan_exercise_id=command.current_workout_plan_exercise_id,
             user_message=command.message.strip(),
             user_profile_summary={
-                "training_level": profile.training_level.value if profile else "beginner",
-                "primary_goal": profile.primary_goal.value
-                if profile
-                else "general_health",
+                "training_level": (
+                    profile.training_level.value if profile else "beginner"
+                ),
+                "primary_goal": (
+                    profile.primary_goal.value if profile else "general_health"
+                ),
                 "injuries": profile.injuries if profile else [],
                 "notes": profile.notes if profile else None,
                 "equipment": equipment,
@@ -424,9 +439,11 @@ class AIChatUseCase:
             return None
         return {
             "type": result.suggested_action.type,
-            "exercise_id": str(result.suggested_action.exercise_id)
-            if result.suggested_action.exercise_id
-            else None,
+            "exercise_id": (
+                str(result.suggested_action.exercise_id)
+                if result.suggested_action.exercise_id
+                else None
+            ),
             "exercise_name": result.suggested_action.exercise_name,
             "target_sets": result.suggested_action.target_sets,
             "target_reps": result.suggested_action.target_reps,

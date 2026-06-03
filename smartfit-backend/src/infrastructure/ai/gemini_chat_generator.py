@@ -60,7 +60,9 @@ class GeminiAIChatGenerator(AIWorkoutGeneratorPort):
         try:
             raw_payload = json.loads(raw_text)
         except json.JSONDecodeError as exc:
-            raise AIChatInvalidOutputError("Gemini chat returned invalid JSON.") from exc
+            raise AIChatInvalidOutputError(
+                "Gemini chat returned invalid JSON."
+            ) from exc
 
         return self.schema_validator.validate(raw_payload)
 
@@ -126,4 +128,6 @@ class GeminiAIChatGenerator(AIWorkoutGeneratorPort):
                         part_text = getattr(part, "text", None)
                         if isinstance(part_text, str) and part_text.strip():
                             return part_text
-        raise AIChatInvalidOutputError("Gemini chat response does not contain usable text.")
+        raise AIChatInvalidOutputError(
+            "Gemini chat response does not contain usable text."
+        )

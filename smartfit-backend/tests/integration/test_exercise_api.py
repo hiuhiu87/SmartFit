@@ -71,7 +71,9 @@ async def test_list_exercises_filter_by_primary_muscle(exercise_test_app) -> Non
     async with AsyncClient(
         transport=ASGITransport(app=exercise_test_app), base_url="http://testserver"
     ) as client:
-        response = await client.get("/api/v1/exercises", params={"primary_muscle": "chest"})
+        response = await client.get(
+            "/api/v1/exercises", params={"primary_muscle": "chest"}
+        )
 
     assert response.status_code == 200
     items = response.json()["data"]["items"]
@@ -84,7 +86,9 @@ async def test_list_exercises_filter_by_equipment(exercise_test_app) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=exercise_test_app), base_url="http://testserver"
     ) as client:
-        response = await client.get("/api/v1/exercises", params={"equipment": "dumbbell"})
+        response = await client.get(
+            "/api/v1/exercises", params={"equipment": "dumbbell"}
+        )
 
     assert response.status_code == 200
     items = response.json()["data"]["items"]
@@ -97,7 +101,9 @@ async def test_list_exercises_filter_by_difficulty(exercise_test_app) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=exercise_test_app), base_url="http://testserver"
     ) as client:
-        response = await client.get("/api/v1/exercises", params={"difficulty": "beginner"})
+        response = await client.get(
+            "/api/v1/exercises", params={"difficulty": "beginner"}
+        )
 
     assert response.status_code == 200
     items = response.json()["data"]["items"]
@@ -110,8 +116,12 @@ async def test_list_exercises_limit_offset(exercise_test_app) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=exercise_test_app), base_url="http://testserver"
     ) as client:
-        first_page = await client.get("/api/v1/exercises", params={"limit": 2, "offset": 0})
-        second_page = await client.get("/api/v1/exercises", params={"limit": 2, "offset": 2})
+        first_page = await client.get(
+            "/api/v1/exercises", params={"limit": 2, "offset": 0}
+        )
+        second_page = await client.get(
+            "/api/v1/exercises", params={"limit": 2, "offset": 2}
+        )
 
     assert first_page.status_code == 200
     assert second_page.status_code == 200
@@ -127,7 +137,9 @@ async def test_get_exercise_by_id_returns_detail(exercise_test_app) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=exercise_test_app), base_url="http://testserver"
     ) as client:
-        list_response = await client.get("/api/v1/exercises", params={"equipment": "dumbbell"})
+        list_response = await client.get(
+            "/api/v1/exercises", params={"equipment": "dumbbell"}
+        )
         exercise_id = list_response.json()["data"]["items"][0]["id"]
         response = await client.get(f"/api/v1/exercises/{exercise_id}")
 

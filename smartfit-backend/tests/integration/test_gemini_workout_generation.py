@@ -11,7 +11,12 @@ from app.container import container
 from app.settings import get_settings
 from app.main import create_app
 from src.domain.ai.entities import AIWorkoutExerciseResult, AIWorkoutGenerationResult
-from src.domain.common.enums import Goal, ReadinessCategory, ReadinessRecommendation, TrainingLevel
+from src.domain.common.enums import (
+    Goal,
+    ReadinessCategory,
+    ReadinessRecommendation,
+    TrainingLevel,
+)
 from src.domain.common.exceptions import (
     AIConfigurationError,
     AIExerciseMappingError,
@@ -20,11 +25,24 @@ from src.domain.common.exceptions import (
 )
 from src.infrastructure.ai.gemini_workout_generator import GeminiWorkoutGenerator
 from src.infrastructure.database.base import utcnow
-from src.infrastructure.database.models.ai_model import AIRequestModel, AIUsageDailyModel
-from src.infrastructure.database.models.exercise_model import ExerciseAlternativeModel, ExerciseModel
+from src.infrastructure.database.models.ai_model import (
+    AIRequestModel,
+    AIUsageDailyModel,
+)
+from src.infrastructure.database.models.exercise_model import (
+    ExerciseAlternativeModel,
+    ExerciseModel,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
-from src.infrastructure.database.models.user_model import UserEquipmentModel, UserModel, UserProfileModel
-from src.infrastructure.database.models.workout_model import WorkoutPlanExerciseModel, WorkoutPlanModel
+from src.infrastructure.database.models.user_model import (
+    UserEquipmentModel,
+    UserModel,
+    UserProfileModel,
+)
+from src.infrastructure.database.models.workout_model import (
+    WorkoutPlanExerciseModel,
+    WorkoutPlanModel,
+)
 from src.infrastructure.database.session import get_session
 from src.infrastructure.seed.seed_exercises import _seed_rows
 
@@ -171,8 +189,30 @@ def _valid_ai_result(slug: str = "dumbbell-bench-press", rpe: int = 7):
     )
 
 
+def _continuous_cardio_ai_result():
+    return AIWorkoutGenerationResult(
+        workout_title="Recovery Walk Session",
+        training_decision="recovery",
+        estimated_duration_minutes=20,
+        exercises=[
+            AIWorkoutExerciseResult(
+                exercise_slug="treadmill-zone-2-walk",
+                sets=1,
+                reps="20 minutes",
+                rest_seconds=0,
+                rpe=4,
+                notes="Maintain a conversational pace.",
+            )
+        ],
+        reasoning_summary="Continuous cardio block with no rest interval.",
+        safety_note="Stop if you feel sharp pain, dizziness, or unusual discomfort.",
+    )
+
+
 @pytest.mark.asyncio
-async def test_generate_workout_rule_based_mode_still_works(gemini_test_context) -> None:
+async def test_generate_workout_rule_based_mode_still_works(
+    gemini_test_context,
+) -> None:
     app = gemini_test_context["app"]
     container.gemini_workout_generator_impl = FakeGeminiGenerator(
         result=_valid_ai_result()
@@ -463,3 +503,40 @@ async def test_missing_gemini_api_key(gemini_test_context, monkeypatch) -> None:
     assert auto_response.json()["data"]["source"] == "fallback"
     assert gemini_response.status_code == 503
     assert gemini_response.json()["error"]["code"] == "ai_configuration_error"
+
+
+@pytest.mark.asyncio
+async def test_gemini_allows_zero_rest_for_continuous_cardio(
+    gemini_test_context,
+) -> None:
+    app = gemini_test_context["app"]
+    container.gemini_workout_generator_impl = FakeGeminiGenerator(
+        result=_continuous_cardio_ai_result()
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, access_token = await _register_and_login(
+            client, "gemini.cardiozero@example.com"
+        )
+        await _seed_profile_equipment_and_readiness(
+            gemini_test_context["session_factory"],
+            user_id,
+            52,
+            equipment=["treadmill", "bodyweight"],
+        )
+        response = await client.post(
+            "/api/v1/workouts/generate",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "available_time_minutes": 30,
+                "equipment": ["treadmill", "bodyweight"],
+                "generation_mode": "gemini",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["source"] == "ai"
+    assert payload["exercises"][0]["rest_seconds"] == 0

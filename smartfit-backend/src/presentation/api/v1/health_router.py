@@ -51,5 +51,7 @@ async def get_latest_summary(
     user_id: UUID = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
 ) -> APIResponseSchema[dict]:
-    result = await container.get_latest_health_summary_use_case(session).execute(user_id)
+    result = await container.get_latest_health_summary_use_case(session).execute(
+        user_id
+    )
     return APIResponseSchema(data=asdict(result))

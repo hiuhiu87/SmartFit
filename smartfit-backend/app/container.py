@@ -61,17 +61,27 @@ from src.infrastructure.ai.schema_validator import (
     AIWorkoutSchemaValidator,
 )
 from src.infrastructure.repositories.ai_repository import SQLModelAIRequestRepository
-from src.infrastructure.repositories.ai_usage_repository import SQLModelAIUsageRepository
-from src.infrastructure.repositories.exercise_repository import SQLModelExerciseRepository
+from src.infrastructure.repositories.ai_usage_repository import (
+    SQLModelAIUsageRepository,
+)
+from src.infrastructure.repositories.exercise_repository import (
+    SQLModelExerciseRepository,
+)
 from src.infrastructure.repositories.health_repository import SQLModelHealthRepository
-from src.infrastructure.repositories.readiness_repository import SQLModelReadinessRepository
+from src.infrastructure.repositories.readiness_repository import (
+    SQLModelReadinessRepository,
+)
 from src.infrastructure.repositories.user_repository import SQLModelUserRepository
 from src.infrastructure.repositories.workout_repository import SQLModelWorkoutRepository
-from src.infrastructure.repositories.progress_repository import SQLModelProgressRepository
+from src.infrastructure.repositories.progress_repository import (
+    SQLModelProgressRepository,
+)
 from src.infrastructure.security.jwt_provider import JWTProvider
 from src.infrastructure.security.password_hasher import PasswordHasher
 from src.domain.progress.services import ProgressCalculator
-from src.infrastructure.repositories.subscription_repository import SQLModelSubscriptionRepository
+from src.infrastructure.repositories.subscription_repository import (
+    SQLModelSubscriptionRepository,
+)
 
 
 class Container:
@@ -91,13 +101,17 @@ class Container:
         self.ai_workout_safety_validator = AIWorkoutSafetyValidator()
         self.ai_chat_safety_validator = AIChatSafetyValidator()
         self.ai_workout_output_mapper = AIWorkoutOutputMapper()
-        self.gemini_workout_generator_impl: AIWorkoutGeneratorPort = GeminiWorkoutGenerator(
-            self.gemini_prompt_builder,
-            self.ai_workout_schema_validator,
+        self.gemini_workout_generator_impl: AIWorkoutGeneratorPort = (
+            GeminiWorkoutGenerator(
+                self.gemini_prompt_builder,
+                self.ai_workout_schema_validator,
+            )
         )
-        self.gemini_ai_chat_generator_impl: AIWorkoutGeneratorPort = GeminiAIChatGenerator(
-            self.gemini_chat_prompt_builder,
-            self.ai_chat_schema_validator,
+        self.gemini_ai_chat_generator_impl: AIWorkoutGeneratorPort = (
+            GeminiAIChatGenerator(
+                self.gemini_chat_prompt_builder,
+                self.ai_chat_schema_validator,
+            )
         )
 
     def register_user_use_case(self, session: AsyncSession) -> RegisterUserUseCase:
@@ -173,9 +187,7 @@ class Container:
             subscription_repository=None,
         )
 
-    def list_exercises_use_case(
-        self, session: AsyncSession
-    ) -> ListExercisesUseCase:
+    def list_exercises_use_case(self, session: AsyncSession) -> ListExercisesUseCase:
         return ListExercisesUseCase(self.get_exercise_repository(session))
 
     def get_exercise_by_id_use_case(
@@ -273,9 +285,7 @@ class Container:
     def start_workout_use_case(self, session: AsyncSession) -> StartWorkoutUseCase:
         return StartWorkoutUseCase(self.get_workout_repository(session))
 
-    def log_workout_set_use_case(
-        self, session: AsyncSession
-    ) -> LogWorkoutSetUseCase:
+    def log_workout_set_use_case(self, session: AsyncSession) -> LogWorkoutSetUseCase:
         return LogWorkoutSetUseCase(self.get_workout_repository(session))
 
     def complete_workout_use_case(

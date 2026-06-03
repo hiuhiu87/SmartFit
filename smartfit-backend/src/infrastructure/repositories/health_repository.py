@@ -44,7 +44,9 @@ class SQLModelHealthRepository(HealthRepository):
         model.steps = summary.steps
         model.active_energy_kcal = summary.active_energy_kcal
         model.source = summary.source
-        model.created_at = summary.created_at or model.created_at or datetime.now(timezone.utc)
+        model.created_at = (
+            summary.created_at or model.created_at or datetime.now(timezone.utc)
+        )
         model.updated_at = summary.updated_at or datetime.now(timezone.utc)
         await self.session.flush()
         return health_summary_model_to_domain(model)
@@ -71,7 +73,9 @@ class SQLModelHealthRepository(HealthRepository):
         model.motivation = checkin.motivation
         model.sleep_quality = checkin.sleep_quality
         model.notes = checkin.notes
-        model.created_at = checkin.created_at or model.created_at or datetime.now(timezone.utc)
+        model.created_at = (
+            checkin.created_at or model.created_at or datetime.now(timezone.utc)
+        )
         model.updated_at = checkin.updated_at or datetime.now(timezone.utc)
         await self.session.flush()
         return manual_checkin_model_to_domain(model)
@@ -91,7 +95,9 @@ class SQLModelHealthRepository(HealthRepository):
         statement = (
             select(HealthSummaryModel)
             .where(HealthSummaryModel.user_id == user_id)
-            .order_by(HealthSummaryModel.date.desc(), HealthSummaryModel.updated_at.desc())
+            .order_by(
+                HealthSummaryModel.date.desc(), HealthSummaryModel.updated_at.desc()
+            )
         )
         result = await self.session.execute(statement)
         model = result.scalars().first()
@@ -106,7 +112,9 @@ class SQLModelHealthRepository(HealthRepository):
                 HealthSummaryModel.user_id == user_id,
                 HealthSummaryModel.date < before_date,
             )
-            .order_by(HealthSummaryModel.date.desc(), HealthSummaryModel.updated_at.desc())
+            .order_by(
+                HealthSummaryModel.date.desc(), HealthSummaryModel.updated_at.desc()
+            )
             .limit(limit)
         )
         result = await self.session.execute(statement)

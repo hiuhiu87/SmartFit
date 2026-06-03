@@ -78,7 +78,9 @@ class SQLModelWorkoutRepository(WorkoutRepository):
 
         statement = (
             select(WorkoutPlanExerciseModel, ExerciseModel)
-            .join(ExerciseModel, ExerciseModel.id == WorkoutPlanExerciseModel.exercise_id)
+            .join(
+                ExerciseModel, ExerciseModel.id == WorkoutPlanExerciseModel.exercise_id
+            )
             .where(WorkoutPlanExerciseModel.workout_plan_id == workout_id)
             .order_by(WorkoutPlanExerciseModel.order_index.asc())
         )
@@ -216,7 +218,9 @@ class SQLModelWorkoutRepository(WorkoutRepository):
             )
         )
         result = await self.session.execute(statement)
-        return [workout_set_log_model_to_domain(model) for model in result.scalars().all()]
+        return [
+            workout_set_log_model_to_domain(model) for model in result.scalars().all()
+        ]
 
     async def complete_workout_log(self, workout_log: WorkoutLog) -> WorkoutLog:
         statement = select(WorkoutLogModel).where(WorkoutLogModel.id == workout_log.id)
@@ -272,12 +276,10 @@ class SQLModelWorkoutRepository(WorkoutRepository):
         from_date: date_type | None,
         to_date: date_type | None,
     ) -> tuple[list[WorkoutHistoryItem], int]:
-        feedback_subquery = (
-            select(
-                WorkoutFeedbackModel.workout_log_id.label("feedback_workout_log_id"),
-                WorkoutFeedbackModel.difficulty_feedback.label("difficulty_feedback"),
-            ).subquery()
-        )
+        feedback_subquery = select(
+            WorkoutFeedbackModel.workout_log_id.label("feedback_workout_log_id"),
+            WorkoutFeedbackModel.difficulty_feedback.label("difficulty_feedback"),
+        ).subquery()
 
         base = (
             select(

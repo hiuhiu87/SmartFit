@@ -6,21 +6,27 @@ class GeminiChatPromptBuilder:
         readiness = context.readiness_summary or {}
         workout = context.workout_summary
         current = context.current_exercise or {}
-        replacements = "\n".join(
-            [
-                f"- {item['exercise_id']} | {item['exercise_name']} | {item['slug']} | "
-                f"{item['primary_muscle']} | {item['equipment']} | {item['difficulty']}"
-                for item in context.available_replacements
-            ]
-        ) or "- none"
+        replacements = (
+            "\n".join(
+                [
+                    f"- {item['exercise_id']} | {item['exercise_name']} | {item['slug']} | "
+                    f"{item['primary_muscle']} | {item['equipment']} | {item['difficulty']}"
+                    for item in context.available_replacements
+                ]
+            )
+            or "- none"
+        )
 
         recent_sets = current.get("logged_sets", []) if current else []
-        recent_set_lines = "\n".join(
-            [
-                f"- set {item['set_number']}: weight={item['weight']} reps={item['reps']} rpe={item['rpe']} completed={item['completed']}"
-                for item in recent_sets[-3:]
-            ]
-        ) or "- none"
+        recent_set_lines = (
+            "\n".join(
+                [
+                    f"- set {item['set_number']}: weight={item['weight']} reps={item['reps']} rpe={item['rpe']} completed={item['completed']}"
+                    for item in recent_sets[-3:]
+                ]
+            )
+            or "- none"
+        )
 
         current_exercise_text = (
             "Current exercise:\n"

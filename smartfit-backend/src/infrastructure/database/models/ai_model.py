@@ -54,16 +54,28 @@ class AIRequestModel(SQLModel, table=True):
 
 class AIUsageDailyModel(SQLModel, table=True):
     __tablename__ = "ai_usage_daily"
-    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_ai_usage_daily_user_date"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_ai_usage_daily_user_date"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
     date: date_type = Field(sa_column=Column(Date, nullable=False, index=True))
-    ai_workout_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
-    ai_chat_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
-    ai_replacement_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
-    ai_weekly_report_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
-    total_ai_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
+    ai_workout_count: int = Field(
+        default=0, sa_column=Column(Integer, nullable=False, default=0)
+    )
+    ai_chat_count: int = Field(
+        default=0, sa_column=Column(Integer, nullable=False, default=0)
+    )
+    ai_replacement_count: int = Field(
+        default=0, sa_column=Column(Integer, nullable=False, default=0)
+    )
+    ai_weekly_report_count: int = Field(
+        default=0, sa_column=Column(Integer, nullable=False, default=0)
+    )
+    total_ai_count: int = Field(
+        default=0, sa_column=Column(Integer, nullable=False, default=0)
+    )
     created_at: datetime = Field(
         default_factory=utcnow,
         sa_column=Column(DateTime(timezone=True), nullable=False),

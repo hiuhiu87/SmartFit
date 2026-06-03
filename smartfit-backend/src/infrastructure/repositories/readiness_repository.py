@@ -38,7 +38,9 @@ class SQLModelReadinessRepository(ReadinessRepository):
         model.recommendation = readiness_score.recommendation.value
         model.confidence = readiness_score.confidence
         model.explanation = readiness_score.explanation
-        model.created_at = readiness_score.created_at or model.created_at or datetime.now(timezone.utc)
+        model.created_at = (
+            readiness_score.created_at or model.created_at or datetime.now(timezone.utc)
+        )
         model.updated_at = readiness_score.updated_at or datetime.now(timezone.utc)
         await self.session.flush()
         return readiness_score_model_to_domain(model)
@@ -60,7 +62,9 @@ class SQLModelReadinessRepository(ReadinessRepository):
         statement = (
             select(ReadinessScoreModel)
             .where(ReadinessScoreModel.user_id == user_id)
-            .order_by(ReadinessScoreModel.date.desc(), ReadinessScoreModel.updated_at.desc())
+            .order_by(
+                ReadinessScoreModel.date.desc(), ReadinessScoreModel.updated_at.desc()
+            )
             .limit(limit)
         )
         result = await self.session.execute(statement)
@@ -72,7 +76,9 @@ class SQLModelReadinessRepository(ReadinessRepository):
         statement = (
             select(ReadinessScoreModel)
             .where(ReadinessScoreModel.user_id == user_id)
-            .order_by(ReadinessScoreModel.date.desc(), ReadinessScoreModel.updated_at.desc())
+            .order_by(
+                ReadinessScoreModel.date.desc(), ReadinessScoreModel.updated_at.desc()
+            )
             .limit(1)
         )
         result = await self.session.execute(statement)

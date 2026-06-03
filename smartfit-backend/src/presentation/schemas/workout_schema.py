@@ -10,6 +10,9 @@ class GenerateWorkoutRequestSchema(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     date: date_type = Field(default_factory=date_type.today)
+    workout_split: Literal["full_body", "upper_body", "lower_body", "push", "pull"] = (
+        "full_body"
+    )
     focus_muscle: str | None = Field(
         default=None, validation_alias=AliasChoices("focus_muscle", "focus")
     )

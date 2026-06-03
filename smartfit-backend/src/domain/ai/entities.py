@@ -61,6 +61,8 @@ class AIRequestLog:
     provider: str
     model_name: str
     generation_mode: str | None = None
+    prompt: str | None = None
+    response: str | None = None
     input_payload: dict[str, Any] | None = None
     output_payload: dict[str, Any] | None = None
     status: str = "success"
@@ -68,6 +70,7 @@ class AIRequestLog:
     error_message: str | None = None
     fallback_used: bool = False
     latency_ms: int | None = None
+    metadata: dict[str, Any] | None = None
     created_at: datetime | None = None
 
 
@@ -121,6 +124,7 @@ class AIWorkoutGenerationContext:
     readiness_recommendation: str
     focus_muscle: str | None
     available_time_minutes: int
+    workout_split: str = "full_body"
     equipment: list[str] = field(default_factory=list)
     avoid_exercises: list[str] = field(default_factory=list)
     allowed_exercises: list[AIAllowedExercise] = field(default_factory=list)

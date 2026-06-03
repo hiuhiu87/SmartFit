@@ -44,13 +44,19 @@ class GeminiWorkoutGenerator(AIWorkoutGeneratorPort):
 
         prompt = self.prompt_builder.build_generate_workout_prompt(context)
         logger.info(
-            "Calling Gemini workout generation for user %s with model=%s timeout=%ss allowed_exercises=%s prompt_chars=%s",
+            "Calling Gemini workout generation for user %s with model=%s timeout=%ss allowed_exercises=%s prompt_chars=%s readiness_score=%s focus=%s equipment=%s avoid_exercises=%s allowed_slugs=%s",
             context.user_id,
             settings.GEMINI_MODEL,
             settings.GEMINI_TIMEOUT_SECONDS,
             len(context.allowed_exercises),
             len(prompt),
+            context.readiness_score,
+            context.focus_muscle,
+            context.equipment,
+            context.avoid_exercises,
+            [item.slug for item in context.allowed_exercises],
         )
+        logger.debug("Gemini workout prompt preview: %s", self._truncate(prompt, 1500))
         try:
             raw_text = await asyncio.wait_for(
                 self._generate_content(prompt),
@@ -65,12 +71,53 @@ class GeminiWorkoutGenerator(AIWorkoutGeneratorPort):
         except Exception as exc:
             raise AIGenerationError(f"Gemini provider error: {exc}") from exc
 
+        logger.info(
+            "Gemini workout raw response received for user %s chars=%s preview=%s",
+            context.user_id,
+            len(raw_text),
+            self._truncate(raw_text, 1500),
+        )
+
         try:
             raw_payload = json.loads(raw_text)
         except json.JSONDecodeError as exc:
+            logger.warning(
+                "Gemini workout JSON parsing failed for user %s: %s raw_preview=%s",
+                context.user_id,
+                exc,
+                self._truncate(raw_text, 1500),
+            )
             raise AIInvalidOutputError("Gemini returned invalid JSON.") from exc
 
-        return self.schema_validator.validate_workout_output(raw_payload)
+        logger.info(
+            "Gemini workout JSON parsed for user %s keys=%s",
+            context.user_id,
+            (
+                sorted(raw_payload.keys())
+                if isinstance(raw_payload, dict)
+                else type(raw_payload).__name__
+            ),
+        )
+
+        try:
+            result = self.schema_validator.validate_workout_output(raw_payload)
+        except AIInvalidOutputError as exc:
+            logger.warning(
+                "Gemini workout schema validation failed for user %s: %s parsed_payload=%s",
+                context.user_id,
+                exc,
+                self._truncate(json.dumps(raw_payload, ensure_ascii=False), 2000),
+            )
+            raise
+
+        logger.info(
+            "Gemini workout schema validation passed for user %s title=%s decision=%s exercise_count=%s",
+            context.user_id,
+            result.workout_title,
+            result.training_decision,
+            len(result.exercises),
+        )
+        return result
 
     async def chat(self, context: AIChatContext) -> AIChatResult:
         raise NotImplementedError("Use GeminiAIChatGenerator for AI chat.")
@@ -139,3 +186,8 @@ class GeminiWorkoutGenerator(AIWorkoutGeneratorPort):
                         if isinstance(part_text, str) and part_text.strip():
                             return part_text
         raise AIInvalidOutputError("Gemini response does not contain usable text.")
+
+    def _truncate(self, value: str, limit: int) -> str:
+        if len(value) <= limit:
+            return value
+        return f"{value[:limit]}...<truncated>"

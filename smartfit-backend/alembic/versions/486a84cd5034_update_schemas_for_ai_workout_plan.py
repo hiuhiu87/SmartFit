@@ -9,10 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 import sqlmodel  # noqa: F401
 
-
-
-revision = '486a84cd5034'
-down_revision = 'e24cb468487f'
+revision = "486a84cd5034"
+down_revision = "e24cb468487f"
 branch_labels = None
 depends_on = None
 

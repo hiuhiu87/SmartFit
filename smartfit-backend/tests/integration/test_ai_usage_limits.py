@@ -16,13 +16,29 @@ from src.domain.ai.entities import (
     AIWorkoutExerciseResult,
     AIWorkoutGenerationResult,
 )
-from src.domain.common.enums import Goal, ReadinessCategory, ReadinessRecommendation, TrainingLevel
+from src.domain.common.enums import (
+    Goal,
+    ReadinessCategory,
+    ReadinessRecommendation,
+    TrainingLevel,
+)
 from src.domain.common.exceptions import AIInvalidOutputError, AIProviderTimeoutError
 from src.infrastructure.database.base import utcnow
-from src.infrastructure.database.models.ai_model import AIChatMessageModel, AIRequestModel, AIUsageDailyModel
-from src.infrastructure.database.models.exercise_model import ExerciseAlternativeModel, ExerciseModel
+from src.infrastructure.database.models.ai_model import (
+    AIChatMessageModel,
+    AIRequestModel,
+    AIUsageDailyModel,
+)
+from src.infrastructure.database.models.exercise_model import (
+    ExerciseAlternativeModel,
+    ExerciseModel,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
-from src.infrastructure.database.models.user_model import UserEquipmentModel, UserModel, UserProfileModel
+from src.infrastructure.database.models.user_model import (
+    UserEquipmentModel,
+    UserModel,
+    UserProfileModel,
+)
 from src.infrastructure.database.models.workout_model import (
     WorkoutFeedbackModel,
     WorkoutLogModel,
@@ -66,8 +82,12 @@ class FakeGeminiChatGenerator:
 @pytest_asyncio.fixture
 async def ai_usage_context(tmp_path: Path):
     db_path = tmp_path / "ai_usage_test.sqlite3"
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}", future=True, echo=False)
-    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{db_path}", future=True, echo=False
+    )
+    session_factory = async_sessionmaker(
+        bind=engine, class_=AsyncSession, expire_on_commit=False
+    )
 
     async with engine.begin() as connection:
         await connection.run_sync(
@@ -126,7 +146,10 @@ async def _register_and_login(client: AsyncClient, email: str) -> tuple[str, str
         "/api/v1/auth/login",
         json={"email": email, "password": "password123"},
     )
-    return register_response.json()["data"]["id"], login_response.json()["data"]["access_token"]
+    return (
+        register_response.json()["data"]["id"],
+        login_response.json()["data"]["access_token"],
+    )
 
 
 async def _seed_profile_and_readiness(
@@ -196,7 +219,9 @@ async def _get_exercise_id_by_slug(
     session_factory: async_sessionmaker[AsyncSession], slug: str
 ) -> UUID:
     async with session_factory() as session:
-        result = await session.execute(select(ExerciseModel).where(ExerciseModel.slug == slug))
+        result = await session.execute(
+            select(ExerciseModel).where(ExerciseModel.slug == slug)
+        )
         model = result.scalar_one()
         return model.id
 
@@ -218,7 +243,9 @@ def _valid_ai_chat_result(exercise_id: UUID) -> AIChatResult:
     )
 
 
-async def _generate_workout(client: AsyncClient, token: str, generation_mode: str) -> dict:
+async def _generate_workout(
+    client: AsyncClient, token: str, generation_mode: str
+) -> dict:
     response = await client.post(
         "/api/v1/workouts/generate",
         headers={"Authorization": f"Bearer {token}"},
@@ -313,7 +340,9 @@ async def _prefill_usage(
 @pytest.mark.asyncio
 async def test_ai_usage_today_empty(ai_usage_context) -> None:
     app = ai_usage_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         _, token = await _register_and_login(client, "ai.usage.empty@example.com")
         response = await client.get(
             "/api/v1/ai/usage/today",
@@ -345,8 +374,12 @@ async def test_ai_workout_generation_increments_usage(ai_usage_context) -> None:
     container.gemini_workout_generator_impl = FakeGeminiWorkoutGenerator(
         result=_valid_ai_workout_result()
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.usage.workout@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.usage.workout@example.com"
+        )
         await _seed_profile_and_readiness(ai_usage_context["session_factory"], user_id)
         response = await _generate_workout(client, token, "gemini")
 
@@ -358,13 +391,19 @@ async def test_ai_workout_generation_increments_usage(ai_usage_context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_rule_based_generation_does_not_increment_ai_usage(ai_usage_context) -> None:
+async def test_rule_based_generation_does_not_increment_ai_usage(
+    ai_usage_context,
+) -> None:
     app = ai_usage_context["app"]
     container.gemini_workout_generator_impl = FakeGeminiWorkoutGenerator(
         result=_valid_ai_workout_result()
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.usage.rulebased@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.usage.rulebased@example.com"
+        )
         await _seed_profile_and_readiness(ai_usage_context["session_factory"], user_id)
         response = await _generate_workout(client, token, "rule_based")
 
@@ -381,10 +420,14 @@ async def test_ai_chat_increments_usage(ai_usage_context) -> None:
     replacement_id = await _get_exercise_id_by_slug(
         ai_usage_context["session_factory"], "push-up"
     )
-    chat_generator = FakeGeminiChatGenerator(result=_valid_ai_chat_result(replacement_id))
+    chat_generator = FakeGeminiChatGenerator(
+        result=_valid_ai_chat_result(replacement_id)
+    )
     container.gemini_workout_generator_impl = workout_generator
     container.gemini_ai_chat_generator_impl = chat_generator
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         user_id, token = await _register_and_login(client, "ai.usage.chat@example.com")
         await _seed_profile_and_readiness(ai_usage_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
@@ -393,7 +436,9 @@ async def test_ai_chat_increments_usage(ai_usage_context) -> None:
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0]["workout_plan_exercise_id"],
+                "current_workout_plan_exercise_id": workout["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "message": "The machine is busy. What can I do instead?",
             },
         )
@@ -414,8 +459,12 @@ async def test_ai_chat_limit_exceeded_returns_429(ai_usage_context) -> None:
     container.gemini_ai_chat_generator_impl = FakeGeminiChatGenerator(
         result=_valid_ai_chat_result(replacement_id)
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.usage.chatlimit@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.usage.chatlimit@example.com"
+        )
         await _seed_profile_and_readiness(ai_usage_context["session_factory"], user_id)
         await _prefill_usage(
             ai_usage_context["session_factory"],
@@ -429,7 +478,9 @@ async def test_ai_chat_limit_exceeded_returns_429(ai_usage_context) -> None:
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0]["workout_plan_exercise_id"],
+                "current_workout_plan_exercise_id": workout["exercises"][0][
+                    "workout_plan_exercise_id"
+                ],
                 "message": "The machine is busy. What can I do instead?",
             },
         )
@@ -445,8 +496,12 @@ async def test_auto_mode_fallback_due_to_provider_error_still_records_ai_request
     app = ai_usage_context["app"]
     generator = FakeGeminiWorkoutGenerator(exc=AIInvalidOutputError("invalid json"))
     container.gemini_workout_generator_impl = generator
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.usage.fallback@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.usage.fallback@example.com"
+        )
         await _seed_profile_and_readiness(ai_usage_context["session_factory"], user_id)
         response = await _generate_workout(client, token, "auto")
 
@@ -470,8 +525,12 @@ async def test_auto_mode_fallback_due_to_internal_limit_does_not_call_gemini(
     app = ai_usage_context["app"]
     generator = FakeGeminiWorkoutGenerator(result=_valid_ai_workout_result())
     container.gemini_workout_generator_impl = generator
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.usage.limitfallback@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.usage.limitfallback@example.com"
+        )
         await _seed_profile_and_readiness(ai_usage_context["session_factory"], user_id)
         await _prefill_usage(
             ai_usage_context["session_factory"],
@@ -496,8 +555,12 @@ async def test_ai_request_log_saved_on_success(ai_usage_context) -> None:
     container.gemini_workout_generator_impl = FakeGeminiWorkoutGenerator(
         result=_valid_ai_workout_result()
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "ai.usage.requestlog@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.usage.requestlog@example.com"
+        )
         await _seed_profile_and_readiness(ai_usage_context["session_factory"], user_id)
         response = await _generate_workout(client, token, "gemini")
 

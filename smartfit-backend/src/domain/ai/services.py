@@ -33,11 +33,20 @@ class AIUsagePolicy:
         if total_count >= limits.total_ai_limit:
             raise AIUsageLimitExceededError("Daily AI usage limit reached.")
 
-        if request_type == "generate_workout" and workout_count >= limits.ai_workout_limit:
+        if (
+            request_type == "generate_workout"
+            and workout_count >= limits.ai_workout_limit
+        ):
             raise AIUsageLimitExceededError("Daily AI workout limit reached.")
         if request_type == "chat" and chat_count >= limits.ai_chat_limit:
             raise AIUsageLimitExceededError("Daily AI chat limit reached.")
-        if request_type == "replace_exercise" and replacement_count >= limits.ai_replacement_limit:
+        if (
+            request_type == "replace_exercise"
+            and replacement_count >= limits.ai_replacement_limit
+        ):
             raise AIUsageLimitExceededError("Daily AI replacement limit reached.")
-        if request_type == "weekly_report" and weekly_report_count >= limits.ai_weekly_report_limit:
+        if (
+            request_type == "weekly_report"
+            and weekly_report_count >= limits.ai_weekly_report_limit
+        ):
             raise AIUsageLimitExceededError("Daily AI weekly report limit reached.")

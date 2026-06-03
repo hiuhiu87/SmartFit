@@ -6,14 +6,34 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlmodel import select
 
 from app.main import create_app
-from src.domain.common.enums import Goal, ReadinessCategory, ReadinessRecommendation, TrainingLevel
+from src.domain.common.enums import (
+    Goal,
+    ReadinessCategory,
+    ReadinessRecommendation,
+    TrainingLevel,
+)
 from src.infrastructure.database.base import utcnow
-from src.infrastructure.database.models.exercise_model import ExerciseAlternativeModel, ExerciseModel
+from src.infrastructure.database.models.ai_model import (
+    AIRequestModel,
+    AIUsageDailyModel,
+)
+from src.infrastructure.database.models.exercise_model import (
+    ExerciseAlternativeModel,
+    ExerciseModel,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
-from src.infrastructure.database.models.user_model import UserEquipmentModel, UserModel, UserProfileModel
-from src.infrastructure.database.models.workout_model import WorkoutPlanExerciseModel, WorkoutPlanModel
+from src.infrastructure.database.models.user_model import (
+    UserEquipmentModel,
+    UserModel,
+    UserProfileModel,
+)
+from src.infrastructure.database.models.workout_model import (
+    WorkoutPlanExerciseModel,
+    WorkoutPlanModel,
+)
 from src.infrastructure.database.session import get_session
 from src.infrastructure.seed.seed_exercises import _seed_rows
 
@@ -41,6 +61,8 @@ async def workout_test_context(tmp_path: Path):
                     ExerciseAlternativeModel.__table__,
                     WorkoutPlanModel.__table__,
                     WorkoutPlanExerciseModel.__table__,
+                    AIRequestModel.__table__,
+                    AIUsageDailyModel.__table__,
                 ],
             )
         )
@@ -141,8 +163,9 @@ async def test_generate_chest_dumbbell_workout_success(workout_test_context) -> 
                 "focus_muscle": "chest",
                 "available_time_minutes": 60,
                 "equipment": ["dumbbell", "bench"],
+                "generation_mode": "rule_based",
                 "avoid_exercises": [],
-                "user_note": "I feel okay today."
+                "user_note": "I feel okay today.",
             },
         )
 
@@ -151,15 +174,73 @@ async def test_generate_chest_dumbbell_workout_success(workout_test_context) -> 
     assert payload["source"] == "fallback"
     assert payload["status"] == "generated"
     assert payload["focus_muscle"] == "chest"
+    assert payload["estimated_duration_minutes"] == 60
+    assert len(payload["exercises"]) >= 5
     assert payload["exercises"]
     assert all(
-        item["equipment"] in {"dumbbell", "bodyweight"}
+        item["equipment"] in {"dumbbell", "bodyweight"} for item in payload["exercises"]
+    )
+
+    async with session_factory() as session:
+        saved = await session.get(WorkoutPlanModel, UUID(payload["workout_id"]))
+        assert saved is not None
+
+
+@pytest.mark.asyncio
+async def test_generate_upper_pull_rule_based_structured_workout(
+    workout_test_context,
+) -> None:
+    app = workout_test_context["app"]
+    session_factory = workout_test_context["session_factory"]
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, access_token = await _register_and_login(
+            client, "generate.upperpull@example.com"
+        )
+        await _seed_profile_equipment_and_readiness(
+            session_factory,
+            user_id,
+            72,
+            equipment=["barbell", "dumbbell", "bench", "bodyweight", "bike"],
+        )
+        response = await client.post(
+            "/api/v1/workouts/generate",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "date": "2026-05-31",
+                "focus_muscle": "upper_body_pull",
+                "available_time_minutes": 60,
+                "equipment": ["barbell", "dumbbell", "bench", "bodyweight", "bike"],
+                "generation_mode": "rule_based",
+                "avoid_exercises": [],
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["source"] == "fallback"
+    assert payload["status"] == "generated"
+    assert payload["focus_muscle"] == "upper_body_pull"
+    assert payload["estimated_duration_minutes"] == 60
+    assert len(payload["exercises"]) >= 6
+    assert len({item["exercise_id"] for item in payload["exercises"]}) == len(
+        payload["exercises"]
+    )
+    assert all(
+        item["equipment"] in {"barbell", "dumbbell", "bodyweight", "bike"}
         for item in payload["exercises"]
     )
 
     async with session_factory() as session:
         saved = await session.get(WorkoutPlanModel, UUID(payload["workout_id"]))
         assert saved is not None
+        saved_exercises = await session.execute(
+            select(WorkoutPlanExerciseModel).where(
+                WorkoutPlanExerciseModel.workout_plan_id == saved.id
+            )
+        )
+        assert len(saved_exercises.scalars().all()) >= 5
 
 
 @pytest.mark.asyncio
@@ -181,6 +262,7 @@ async def test_generate_low_readiness_recovery_workout(workout_test_context) -> 
                 "focus_muscle": "chest",
                 "available_time_minutes": 45,
                 "equipment": ["dumbbell"],
+                "generation_mode": "rule_based",
                 "avoid_exercises": [],
             },
         )
@@ -212,6 +294,7 @@ async def test_generate_workout_missing_readiness_fails(workout_test_context) ->
                 "focus_muscle": "chest",
                 "available_time_minutes": 45,
                 "equipment": ["dumbbell"],
+                "generation_mode": "rule_based",
                 "avoid_exercises": [],
             },
         )
@@ -245,6 +328,7 @@ async def test_generate_workout_uses_user_default_equipment_when_request_equipme
                 "focus_muscle": "chest",
                 "available_time_minutes": 45,
                 "equipment": [],
+                "generation_mode": "rule_based",
                 "avoid_exercises": [],
             },
         )
@@ -253,8 +337,7 @@ async def test_generate_workout_uses_user_default_equipment_when_request_equipme
     payload = response.json()["data"]
     assert payload["exercises"]
     assert all(
-        item["equipment"] in {"dumbbell", "bodyweight"}
-        for item in payload["exercises"]
+        item["equipment"] in {"dumbbell", "bodyweight"} for item in payload["exercises"]
     )
 
 
@@ -277,6 +360,7 @@ async def test_generate_workout_avoids_exercises(workout_test_context) -> None:
                 "focus_muscle": "chest",
                 "available_time_minutes": 60,
                 "equipment": ["dumbbell", "bench"],
+                "generation_mode": "rule_based",
                 "avoid_exercises": ["Dumbbell Bench Press"],
             },
         )
@@ -287,7 +371,9 @@ async def test_generate_workout_avoids_exercises(workout_test_context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_workout_accepts_legacy_payload_keys(workout_test_context) -> None:
+async def test_generate_workout_accepts_legacy_payload_keys(
+    workout_test_context,
+) -> None:
     app = workout_test_context["app"]
     session_factory = workout_test_context["session_factory"]
     async with AsyncClient(
@@ -296,7 +382,12 @@ async def test_generate_workout_accepts_legacy_payload_keys(workout_test_context
         user_id, access_token = await _register_and_login(
             client, "generate.legacykeys@example.com"
         )
-        await _seed_profile_equipment_and_readiness(session_factory, user_id, 72)
+        await _seed_profile_equipment_and_readiness(
+            session_factory,
+            user_id,
+            72,
+            target_date=str(date.today()),
+        )
         response = await client.post(
             "/api/v1/workouts/generate",
             headers={"Authorization": f"Bearer {access_token}"},
@@ -304,6 +395,7 @@ async def test_generate_workout_accepts_legacy_payload_keys(workout_test_context
                 "focus": "full_body",
                 "available_minutes": 45,
                 "equipment_types": ["dumbbell", "bench", "bodyweight"],
+                "generation_mode": "rule_based",
             },
         )
 

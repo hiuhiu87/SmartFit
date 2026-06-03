@@ -7,7 +7,9 @@ from src.domain.workout.entities import WorkoutPlan, WorkoutPlanExercise
 
 
 class AIWorkoutOutputMapper:
-    DEFAULT_SAFETY_NOTE = "Stop if you feel sharp pain, dizziness, or unusual discomfort."
+    DEFAULT_SAFETY_NOTE = (
+        "Stop if you feel sharp pain, dizziness, or unusual discomfort."
+    )
 
     def to_workout_plan(
         self,

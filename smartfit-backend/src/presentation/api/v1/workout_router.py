@@ -12,7 +12,10 @@ from src.application.workout.commands import (
     LogWorkoutSetCommand,
     StartWorkoutCommand,
 )
-from src.application.workout.queries import GetWorkoutDetailQuery, GetWorkoutHistoryQuery
+from src.application.workout.queries import (
+    GetWorkoutDetailQuery,
+    GetWorkoutHistoryQuery,
+)
 from src.infrastructure.database.session import get_session
 from src.infrastructure.security.current_user import get_current_user_id
 from src.presentation.schemas.common_schema import APIResponseSchema
@@ -121,9 +124,9 @@ async def get_workout_history(
             items=[
                 WorkoutHistoryItemSchema(
                     workout_id=str(item.workout_id),
-                    workout_log_id=str(item.workout_log_id)
-                    if item.workout_log_id
-                    else None,
+                    workout_log_id=(
+                        str(item.workout_log_id) if item.workout_log_id else None
+                    ),
                     title=item.title,
                     date=item.date,
                     status=item.status,
@@ -143,7 +146,9 @@ async def get_workout_history(
     )
 
 
-@router.get("/{workout_id}", response_model=APIResponseSchema[WorkoutDetailResponseSchema])
+@router.get(
+    "/{workout_id}", response_model=APIResponseSchema[WorkoutDetailResponseSchema]
+)
 async def get_workout(
     workout_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
@@ -153,7 +158,9 @@ async def get_workout(
         GetWorkoutDetailQuery(user_id=user_id, workout_id=workout_id)
     )
     return APIResponseSchema(
-        data=WorkoutDetailResponseSchema(**_to_workout_plan_response(result).model_dump())
+        data=WorkoutDetailResponseSchema(
+            **_to_workout_plan_response(result).model_dump()
+        )
     )
 
 

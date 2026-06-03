@@ -8,9 +8,17 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.main import create_app
-from src.domain.common.enums import Goal, ReadinessCategory, ReadinessRecommendation, TrainingLevel
+from src.domain.common.enums import (
+    Goal,
+    ReadinessCategory,
+    ReadinessRecommendation,
+    TrainingLevel,
+)
 from src.infrastructure.database.base import utcnow
-from src.infrastructure.database.models.exercise_model import ExerciseAlternativeModel, ExerciseModel
+from src.infrastructure.database.models.exercise_model import (
+    ExerciseAlternativeModel,
+    ExerciseModel,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
 from src.infrastructure.database.models.user_model import (
     UserEquipmentModel,
@@ -32,8 +40,12 @@ from src.infrastructure.seed.seed_exercises import _seed_rows
 @pytest_asyncio.fixture
 async def progress_test_context(tmp_path: Path):
     db_path = tmp_path / "progress_test.sqlite3"
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}", future=True, echo=False)
-    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{db_path}", future=True, echo=False
+    )
+    session_factory = async_sessionmaker(
+        bind=engine, class_=AsyncSession, expire_on_commit=False
+    )
 
     async with engine.begin() as connection:
         await connection.run_sync(
@@ -82,7 +94,10 @@ async def _register_and_login(client: AsyncClient, email: str) -> tuple[str, str
         "/api/v1/auth/login",
         json={"email": email, "password": "password123"},
     )
-    return register_response.json()["data"]["id"], login_response.json()["data"]["access_token"]
+    return (
+        register_response.json()["data"]["id"],
+        login_response.json()["data"]["access_token"],
+    )
 
 
 async def _seed_user_basics(
@@ -216,7 +231,9 @@ async def _complete_workout(
 @pytest.mark.asyncio
 async def test_progress_overview_empty_state(progress_test_context) -> None:
     app = progress_test_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         user_id, token = await _register_and_login(client, "progress.empty@example.com")
         await _seed_user_basics(progress_test_context["session_factory"], user_id)
         response = await client.get(
@@ -234,10 +251,16 @@ async def test_progress_overview_empty_state(progress_test_context) -> None:
 @pytest.mark.asyncio
 async def test_progress_overview_with_completed_workouts(progress_test_context) -> None:
     app = progress_test_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "progress.overview@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "progress.overview@example.com"
+        )
         await _seed_user_basics(progress_test_context["session_factory"], user_id)
-        await _complete_workout(client, token, "2026-05-26", "chest", [(20, 10), (20, 8)])
+        await _complete_workout(
+            client, token, "2026-05-26", "chest", [(20, 10), (20, 8)]
+        )
         response = await client.get(
             "/api/v1/progress/overview?from_date=2026-05-25&to_date=2026-05-31",
             headers={"Authorization": f"Bearer {token}"},
@@ -253,8 +276,12 @@ async def test_progress_overview_with_completed_workouts(progress_test_context) 
 @pytest.mark.asyncio
 async def test_progress_muscle_distribution(progress_test_context) -> None:
     app = progress_test_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "progress.muscle@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "progress.muscle@example.com"
+        )
         await _seed_user_basics(progress_test_context["session_factory"], user_id)
         await _complete_workout(client, token, "2026-05-26", "chest", [(20, 10)])
         await _complete_workout(client, token, "2026-05-28", "back", [(18, 10)])
@@ -273,8 +300,12 @@ async def test_progress_muscle_distribution(progress_test_context) -> None:
 @pytest.mark.asyncio
 async def test_average_readiness_this_week(progress_test_context) -> None:
     app = progress_test_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "progress.readiness@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "progress.readiness@example.com"
+        )
         await _seed_user_basics(progress_test_context["session_factory"], user_id)
         response = await client.get(
             "/api/v1/progress/overview?from_date=2026-05-25&to_date=2026-05-31",
@@ -287,10 +318,14 @@ async def test_average_readiness_this_week(progress_test_context) -> None:
 @pytest.mark.asyncio
 async def test_personal_records(progress_test_context) -> None:
     app = progress_test_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         user_id, token = await _register_and_login(client, "progress.pr@example.com")
         await _seed_user_basics(progress_test_context["session_factory"], user_id)
-        await _complete_workout(client, token, "2026-05-26", "chest", [(20, 10), (22, 8)])
+        await _complete_workout(
+            client, token, "2026-05-26", "chest", [(20, 10), (22, 8)]
+        )
         response = await client.get(
             "/api/v1/progress/personal-records?limit=20",
             headers={"Authorization": f"Bearer {token}"},
@@ -306,11 +341,19 @@ async def test_personal_records(progress_test_context) -> None:
 @pytest.mark.asyncio
 async def test_personal_records_filter_by_exercise(progress_test_context) -> None:
     app = progress_test_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "progress.pr.filter@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "progress.pr.filter@example.com"
+        )
         await _seed_user_basics(progress_test_context["session_factory"], user_id)
-        workout_a = await _complete_workout(client, token, "2026-05-26", "chest", [(20, 10)])
-        workout_b = await _complete_workout(client, token, "2026-05-28", "back", [(18, 10)])
+        workout_a = await _complete_workout(
+            client, token, "2026-05-26", "chest", [(20, 10)]
+        )
+        workout_b = await _complete_workout(
+            client, token, "2026-05-28", "back", [(18, 10)]
+        )
         exercise_id = workout_a["generated"]["exercises"][0]["exercise_id"]
         response = await client.get(
             f"/api/v1/progress/personal-records?limit=20&exercise_id={exercise_id}",
@@ -326,8 +369,12 @@ async def test_personal_records_filter_by_exercise(progress_test_context) -> Non
 @pytest.mark.asyncio
 async def test_weekly_report(progress_test_context) -> None:
     app = progress_test_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_id, token = await _register_and_login(client, "progress.report@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "progress.report@example.com"
+        )
         await _seed_user_basics(progress_test_context["session_factory"], user_id)
         await _complete_workout(client, token, "2026-05-30", "chest", [(20, 10)])
         response = await client.get(
@@ -345,9 +392,15 @@ async def test_weekly_report(progress_test_context) -> None:
 @pytest.mark.asyncio
 async def test_user_cannot_see_other_user_progress(progress_test_context) -> None:
     app = progress_test_context["app"]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        user_a_id, token_a = await _register_and_login(client, "progress.owner.a@example.com")
-        user_b_id, token_b = await _register_and_login(client, "progress.owner.b@example.com")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_a_id, token_a = await _register_and_login(
+            client, "progress.owner.a@example.com"
+        )
+        user_b_id, token_b = await _register_and_login(
+            client, "progress.owner.b@example.com"
+        )
         await _seed_user_basics(progress_test_context["session_factory"], user_a_id)
         await _seed_user_basics(progress_test_context["session_factory"], user_b_id)
         await _complete_workout(client, token_a, "2026-05-30", "chest", [(20, 10)])

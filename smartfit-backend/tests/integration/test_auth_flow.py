@@ -581,12 +581,20 @@ async def test_calculate_readiness_from_health_summary(test_app) -> None:
         await client.post(
             "/api/v1/health/summary",
             headers={"Authorization": f"Bearer {access_token}"},
-            json={"date": "2026-05-30", "resting_heart_rate": 58, "heart_rate_variability": 55},
+            json={
+                "date": "2026-05-30",
+                "resting_heart_rate": 58,
+                "heart_rate_variability": 55,
+            },
         )
         await client.post(
             "/api/v1/health/summary",
             headers={"Authorization": f"Bearer {access_token}"},
-            json={"date": "2026-05-29", "resting_heart_rate": 57, "heart_rate_variability": 57},
+            json={
+                "date": "2026-05-29",
+                "resting_heart_rate": 57,
+                "heart_rate_variability": 57,
+            },
         )
         await client.post(
             "/api/v1/health/summary",
@@ -732,7 +740,9 @@ async def test_today_returns_existing_readiness(test_app) -> None:
     assert calculate_response.status_code == 200
     assert response.status_code == 200
     assert response.json()["data"]["date"] == calculate_response.json()["data"]["date"]
-    assert response.json()["data"]["score"] == calculate_response.json()["data"]["score"]
+    assert (
+        response.json()["data"]["score"] == calculate_response.json()["data"]["score"]
+    )
 
 
 @pytest.mark.asyncio

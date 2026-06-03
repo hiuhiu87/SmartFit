@@ -59,7 +59,11 @@ class GetProgressOverviewUseCase:
         )
 
         completed_days = sorted(
-            {log.completed_at.date() for log in completed_logs if log.completed_at is not None}
+            {
+                log.completed_at.date()
+                for log in completed_logs
+                if log.completed_at is not None
+            }
         )
         latest = completed_logs[0] if completed_logs else None
 

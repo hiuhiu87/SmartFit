@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from src.domain.ai.entities import (
@@ -7,6 +8,8 @@ from src.domain.ai.entities import (
     AIWorkoutGenerationResult,
 )
 from src.domain.common.exceptions import AIChatInvalidOutputError, AIInvalidOutputError
+
+logger = logging.getLogger(__name__)
 
 
 class AIWorkoutSchemaValidator:
@@ -22,19 +25,31 @@ class AIWorkoutSchemaValidator:
             raise AIInvalidOutputError("AI output must be a JSON object.")
 
         workout_title = raw.get("workout_title")
-        training_decision = raw.get("training_decision")
-        estimated_duration_minutes = raw.get("estimated_duration_minutes")
+        training_decision_raw = raw.get("training_decision")
+        estimated_duration_raw = raw.get("estimated_duration_minutes")
         exercises = raw.get("exercises")
         reasoning_summary = raw.get("reasoning_summary")
         safety_note = raw.get("safety_note")
+        adjustments: list[str] = []
+
+        training_decision = self._normalize_decision(training_decision_raw)
+        if training_decision != training_decision_raw:
+            adjustments.append(
+                f"training_decision {training_decision_raw!r} -> {training_decision!r}"
+            )
+        estimated_duration_minutes = self._coerce_int(
+            estimated_duration_raw,
+            label="estimated_duration_minutes",
+            minimum=5,
+            maximum=180,
+            adjustments=adjustments,
+        )
 
         if not isinstance(workout_title, str) or not workout_title.strip():
             raise AIInvalidOutputError("AI output missing valid workout_title.")
         if training_decision not in self.ALLOWED_DECISIONS:
             raise AIInvalidOutputError("AI output has invalid training_decision.")
-        if not isinstance(estimated_duration_minutes, int) or not (
-            5 <= estimated_duration_minutes <= 180
-        ):
+        if estimated_duration_minutes is None:
             raise AIInvalidOutputError(
                 "AI output has invalid estimated_duration_minutes."
             )
@@ -46,27 +61,55 @@ class AIWorkoutSchemaValidator:
             raise AIInvalidOutputError("AI output missing safety_note.")
 
         parsed_exercises: list[AIWorkoutExerciseResult] = []
-        for item in exercises:
+        for index, item in enumerate(exercises, start=1):
             if not isinstance(item, dict):
-                raise AIInvalidOutputError("AI exercise item must be an object.")
+                raise AIInvalidOutputError(
+                    f"AI exercise #{index} must be a JSON object."
+                )
             slug = item.get("exercise_slug")
-            sets = item.get("sets")
+            sets = self._coerce_int(
+                item.get("sets"),
+                label=f"exercise #{index} sets",
+                minimum=1,
+                maximum=5,
+                adjustments=adjustments,
+            )
             reps = item.get("reps")
-            rest_seconds = item.get("rest_seconds")
-            rpe = item.get("rpe")
+            rest_seconds = self._coerce_rest_seconds(
+                item.get("rest_seconds"),
+                index=index,
+                adjustments=adjustments,
+            )
+            rpe = self._coerce_int(
+                item.get("rpe"),
+                label=f"exercise #{index} rpe",
+                minimum=1,
+                maximum=10,
+                adjustments=adjustments,
+            )
             notes = item.get("notes")
             if not isinstance(slug, str) or not slug.strip():
-                raise AIInvalidOutputError("AI exercise missing exercise_slug.")
-            if not isinstance(sets, int) or not (1 <= sets <= 5):
-                raise AIInvalidOutputError("AI exercise sets must be 1..5.")
+                raise AIInvalidOutputError(
+                    f"AI exercise #{index} missing valid exercise_slug."
+                )
+            if sets is None:
+                raise AIInvalidOutputError(
+                    f"AI exercise #{index} sets={item.get('sets')!r} must be 1..5."
+                )
             if not isinstance(reps, str) or not reps.strip():
-                raise AIInvalidOutputError("AI exercise missing reps.")
-            if not isinstance(rest_seconds, int) or not (15 <= rest_seconds <= 300):
-                raise AIInvalidOutputError("AI exercise rest_seconds must be 15..300.")
-            if not isinstance(rpe, int) or not (1 <= rpe <= 10):
-                raise AIInvalidOutputError("AI exercise rpe must be 1..10.")
+                raise AIInvalidOutputError(f"AI exercise #{index} missing valid reps.")
+            if rest_seconds is None:
+                raise AIInvalidOutputError(
+                    f"AI exercise #{index} rest_seconds={item.get('rest_seconds')!r} must be 0..300."
+                )
+            if rpe is None:
+                raise AIInvalidOutputError(
+                    f"AI exercise #{index} rpe={item.get('rpe')!r} must be 1..10."
+                )
             if notes is not None and not isinstance(notes, str):
-                raise AIInvalidOutputError("AI exercise notes must be a string.")
+                raise AIInvalidOutputError(
+                    f"AI exercise #{index} notes must be a string."
+                )
             parsed_exercises.append(
                 AIWorkoutExerciseResult(
                     exercise_slug=slug,
@@ -83,6 +126,11 @@ class AIWorkoutSchemaValidator:
                 "AI output must include exercises unless training_decision is rest_day."
             )
 
+        if adjustments:
+            logger.info(
+                "Normalized Gemini workout payload adjustments: %s", adjustments
+            )
+
         return AIWorkoutGenerationResult(
             workout_title=workout_title.strip(),
             training_decision=training_decision,
@@ -91,6 +139,72 @@ class AIWorkoutSchemaValidator:
             reasoning_summary=reasoning_summary.strip(),
             safety_note=safety_note.strip(),
         )
+
+    def _normalize_decision(self, value) -> str | None:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+        return normalized
+
+    def _coerce_int(
+        self,
+        value,
+        *,
+        label: str,
+        minimum: int,
+        maximum: int,
+        adjustments: list[str],
+    ) -> int | None:
+        parsed = self._parse_number(value)
+        if parsed is None:
+            return None
+        normalized = int(round(parsed))
+        clamped = max(minimum, min(maximum, normalized))
+        if value != clamped:
+            adjustments.append(f"{label} {value!r} -> {clamped}")
+        return clamped
+
+    def _coerce_rest_seconds(
+        self,
+        value,
+        *,
+        index: int,
+        adjustments: list[str],
+    ) -> int | None:
+        parsed = self._parse_number(value)
+        if parsed is None:
+            return None
+        normalized = int(round(parsed))
+        if normalized <= 0:
+            if normalized != 0:
+                adjustments.append(f"exercise #{index} rest_seconds {value!r} -> 0")
+            return 0
+        if normalized < 15:
+            adjustments.append(f"exercise #{index} rest_seconds {value!r} -> 15")
+            return 15
+        if normalized > 300:
+            adjustments.append(f"exercise #{index} rest_seconds {value!r} -> 300")
+            return 300
+        if value != normalized:
+            adjustments.append(
+                f"exercise #{index} rest_seconds {value!r} -> {normalized}"
+            )
+        return normalized
+
+    def _parse_number(self, value) -> float | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            try:
+                return float(stripped)
+            except ValueError:
+                return None
+        return None
 
 
 class AIChatSchemaValidator:
@@ -127,7 +241,9 @@ class AIChatSchemaValidator:
         suggested_action = None
         if action_raw is not None:
             if not isinstance(action_raw, dict):
-                raise AIChatInvalidOutputError("AI chat suggested_action must be an object.")
+                raise AIChatInvalidOutputError(
+                    "AI chat suggested_action must be an object."
+                )
             action_type = action_raw.get("type")
             if action_type not in self.ALLOWED_ACTION_TYPES:
                 raise AIChatInvalidOutputError("AI chat action type is invalid.")

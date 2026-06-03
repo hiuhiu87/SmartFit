@@ -75,7 +75,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(AIProviderTimeoutError)
-    async def handle_ai_timeout(_: Request, exc: AIProviderTimeoutError) -> JSONResponse:
+    async def handle_ai_timeout(
+        _: Request, exc: AIProviderTimeoutError
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=504,
             content={
@@ -97,9 +99,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(AIGenerationError)
-    async def handle_ai_generation(
-        _: Request, exc: AIGenerationError
-    ) -> JSONResponse:
+    async def handle_ai_generation(_: Request, exc: AIGenerationError) -> JSONResponse:
         return JSONResponse(
             status_code=502,
             content={
