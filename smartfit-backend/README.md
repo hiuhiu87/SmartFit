@@ -227,28 +227,29 @@ chmod +x run-mock-data.sh
 Repo root now includes [render.yaml](/Users/hieunm37/Workspace/Project/smartfit/render.yaml:1) for a Render Blueprint that provisions:
 
 - one `web` service for the FastAPI backend
-- one managed Render Postgres database
 
 Important notes:
 
-- the Blueprint currently uses `plan: free` for both service and database
+- the Blueprint currently uses `plan: free` for the web service
 - free web services can spin down when idle
-- free Render Postgres databases expire after 30 days
-- for a real production environment, switch the database plan to at least `basic-256mb`
+- PostgreSQL is expected to come from Supabase, not Render-managed Postgres
 
 What the current setup does:
 
 - bootstraps a brand-new empty database from current SQLModel metadata, otherwise runs `alembic upgrade head`
 - seeds the exercise catalog once via Render `initialDeployHook`
 - exposes `GET /healthz` for Render health checks
-- accepts Render Postgres connection strings directly via `DATABASE_URL`
+- accepts Supabase Postgres connection strings via `DATABASE_URL`
 
 Deploy flow:
 
 1. Push this repo to GitHub.
-2. In Render, create a new Blueprint and point it at the repo.
-3. Review `render.yaml`, then provide secret values such as `GEMINI_API_KEY`.
-4. Deploy the Blueprint.
+2. In Supabase, open your project and copy a Postgres connection string from `Connect`.
+3. For Render, prefer the Supavisor `Session mode` connection string on port `5432` because it supports IPv4 and is appropriate for a persistent backend service.
+4. Add `sslmode=require` if your copied URL does not already include it.
+5. In Render, create a new Blueprint and point it at the repo.
+6. When prompted for env vars, set `DATABASE_URL` to the Supabase connection string and provide secrets such as `GEMINI_API_KEY`.
+7. Deploy the Blueprint.
 
 Notes for seeding:
 
@@ -262,6 +263,13 @@ Notes for migrations:
 - Render startup therefore uses `python -m app.render_startup`
 - if the database is empty, it creates the schema from current metadata and stamps Alembic to `head`
 - if the database already has tables, it runs normal `alembic upgrade head`
+
+Supabase connection notes:
+
+- Supabase documents direct connections as best for long-lived servers, but they require IPv6 unless you have the IPv4 add-on
+- for Render, the safer default is the Supavisor `Session mode` pooler on port `5432`
+- Supabase recommends SSL for Postgres connections; use `sslmode=require` at minimum
+- this app rewrites `postgres://...` and `postgresql://...` URLs to `postgresql+asyncpg://...` automatically in [app/settings.py](/Users/hieunm37/Workspace/Project/smartfit/smartfit-backend/app/settings.py:1)
 
 This will create a mock user and related records for:
 
