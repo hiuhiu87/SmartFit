@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: smartfit-backend
+    runtime: python
+    rootDir: smartfit-backend
+    plan: free
+    region: singapore
+    buildCommand: pip install --upgrade pip && pip install -e .
+    startCommand: sh -c 'alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}'
+    initialDeployHook: python -m src.infrastructure.seed.seed_exercises
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartfit-postgres
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: 7
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: GEMINI_TIMEOUT_SECONDS
+        value: 45
+      - key: GEMINI_MAX_OUTPUT_TOKENS
+        value: 800
+      - key: ENVIRONMENT
+        value: production
+
+databases:
+  - name: smartfit-postgres
+    plan: free
+    region: singapore
+    postgresMajorVersion: "18"
+    databaseName: smartfit
+    user: smartfit
+    ipAllowList: []

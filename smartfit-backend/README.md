@@ -222,6 +222,40 @@ chmod +x run-mock-data.sh
 ./run-mock-data.sh
 ```
 
+## Deploy to Render
+
+Repo root now includes [render.yaml](/Users/hieunm37/Workspace/Project/smartfit/render.yaml:1) for a Render Blueprint that provisions:
+
+- one `web` service for the FastAPI backend
+- one managed Render Postgres database
+
+Important notes:
+
+- the Blueprint currently uses `plan: free` for both service and database
+- free web services can spin down when idle
+- free Render Postgres databases expire after 30 days
+- for a real production environment, switch the database plan to at least `basic-256mb`
+
+What the current setup does:
+
+- runs `alembic upgrade head` on startup
+- seeds the exercise catalog once via Render `initialDeployHook`
+- exposes `GET /healthz` for Render health checks
+- accepts Render Postgres connection strings directly via `DATABASE_URL`
+
+Deploy flow:
+
+1. Push this repo to GitHub.
+2. In Render, create a new Blueprint and point it at the repo.
+3. Review `render.yaml`, then provide secret values such as `GEMINI_API_KEY`.
+4. Deploy the Blueprint.
+
+Notes for seeding:
+
+- normal restarts and redeploys no longer reseed the exercise catalog
+- Render runs the seed once after the first successful deploy via `initialDeployHook`
+- if you ever need to reseed manually, open a Render shell for the service and run `python -m src.infrastructure.seed.seed_exercises`
+
 This will create a mock user and related records for:
 
 - user/profile/equipment/preferences/notification settings
