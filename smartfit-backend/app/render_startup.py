@@ -35,19 +35,22 @@ async def _create_all_tables() -> None:
 
 
 async def _prepare_database() -> str:
-    table_names = await _get_table_names()
-    user_tables = table_names - {"alembic_version"}
-    has_alembic_version = "alembic_version" in table_names
+    try:
+        table_names = await _get_table_names()
+        user_tables = table_names - {"alembic_version"}
+        has_alembic_version = "alembic_version" in table_names
 
-    if not user_tables:
-        await _create_all_tables()
-        return "bootstrap_and_stamp"
+        if not user_tables:
+            await _create_all_tables()
+            return "bootstrap_and_stamp"
 
-    if not has_alembic_version:
-        await _create_all_tables()
-        return "stamp_existing_schema"
+        if not has_alembic_version:
+            await _create_all_tables()
+            return "stamp_existing_schema"
 
-    return "upgrade"
+        return "upgrade"
+    finally:
+        await engine.dispose()
 
 
 async def _get_exercise_count() -> int:
@@ -59,14 +62,17 @@ async def _get_exercise_count() -> int:
 
 
 async def _seed_exercises_if_empty() -> int:
-    exercise_count = await _get_exercise_count()
-    if exercise_count > 0:
-        print(f"Exercise seed skipped: existing rows={exercise_count}")
-        return 0
+    try:
+        exercise_count = await _get_exercise_count()
+        if exercise_count > 0:
+            print(f"Exercise seed skipped: existing rows={exercise_count}")
+            return 0
 
-    inserted = await seed_exercises()
-    print(f"Exercise seed completed during startup: inserted={inserted}")
-    return inserted
+        inserted = await seed_exercises()
+        print(f"Exercise seed completed during startup: inserted={inserted}")
+        return inserted
+    finally:
+        await engine.dispose()
 
 
 def main() -> None:
