@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 from pathlib import Path
 
@@ -37,8 +35,13 @@ async def _bootstrap_if_empty() -> bool:
     return True
 
 
-async def main() -> None:
+async def _prepare_database() -> bool:
     bootstrapped = await _bootstrap_if_empty()
+    return bootstrapped
+
+
+def main() -> None:
+    bootstrapped = asyncio.run(_prepare_database())
     alembic_cfg = _alembic_config()
 
     if bootstrapped:
@@ -51,4 +54,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
