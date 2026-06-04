@@ -23,30 +23,41 @@ async def _get_table_names() -> set[str]:
         )
 
 
-async def _bootstrap_if_empty() -> bool:
+async def _create_all_tables() -> None:
     import_models()
-    table_names = await _get_table_names()
-    user_tables = table_names - {"alembic_version"}
-    if user_tables:
-        return False
 
     async with engine.begin() as connection:
         await connection.run_sync(metadata.create_all)
-    return True
 
 
-async def _prepare_database() -> bool:
-    bootstrapped = await _bootstrap_if_empty()
-    return bootstrapped
+async def _prepare_database() -> str:
+    table_names = await _get_table_names()
+    user_tables = table_names - {"alembic_version"}
+    has_alembic_version = "alembic_version" in table_names
+
+    if not user_tables:
+        await _create_all_tables()
+        return "bootstrap_and_stamp"
+
+    if not has_alembic_version:
+        await _create_all_tables()
+        return "stamp_existing_schema"
+
+    return "upgrade"
 
 
 def main() -> None:
-    bootstrapped = asyncio.run(_prepare_database())
+    action = asyncio.run(_prepare_database())
     alembic_cfg = _alembic_config()
 
-    if bootstrapped:
+    if action == "bootstrap_and_stamp":
         command.stamp(alembic_cfg, "head")
         print("Database bootstrap completed: created schema from metadata and stamped head")
+        return
+
+    if action == "stamp_existing_schema":
+        command.stamp(alembic_cfg, "head")
+        print("Existing schema detected without alembic_version: stamped head")
         return
 
     command.upgrade(alembic_cfg, "head")
