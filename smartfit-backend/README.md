@@ -237,7 +237,7 @@ Important notes:
 What the current setup does:
 
 - bootstraps a brand-new empty database from current SQLModel metadata, otherwise runs `alembic upgrade head`
-- seeds the exercise catalog once via Render `initialDeployHook`
+- auto-seeds the exercise catalog during startup if `exercises` is empty
 - exposes `GET /healthz` for Render health checks
 - accepts Supabase Postgres connection strings via `DATABASE_URL`
 
@@ -253,9 +253,10 @@ Deploy flow:
 
 Notes for seeding:
 
-- normal restarts and redeploys no longer reseed the exercise catalog
-- Render runs the seed once after the first successful deploy via `initialDeployHook`
-- if you ever need to reseed manually, open a Render shell for the service and run `python -m src.infrastructure.seed.seed_exercises`
+- startup checks whether the `exercises` table is empty
+- if it is empty, the backend seeds the exercise catalog automatically
+- if rows already exist, startup skips seeding
+- this avoids dependence on Render shell access or `initialDeployHook`
 
 Notes for migrations:
 

@@ -4,9 +4,13 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect
+from sqlmodel import func, select
 
 from src.infrastructure.database.base import import_models, metadata
+from src.infrastructure.database.models.exercise_model import ExerciseModel
 from src.infrastructure.database.session import engine
+from src.infrastructure.database.session import SessionLocal
+from src.infrastructure.seed.seed_exercises import seed_exercises
 
 
 def _alembic_config() -> Config:
@@ -46,6 +50,25 @@ async def _prepare_database() -> str:
     return "upgrade"
 
 
+async def _get_exercise_count() -> int:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(func.count()).select_from(ExerciseModel)
+        )
+        return int(result.scalar_one())
+
+
+async def _seed_exercises_if_empty() -> int:
+    exercise_count = await _get_exercise_count()
+    if exercise_count > 0:
+        print(f"Exercise seed skipped: existing rows={exercise_count}")
+        return 0
+
+    inserted = await seed_exercises()
+    print(f"Exercise seed completed during startup: inserted={inserted}")
+    return inserted
+
+
 def main() -> None:
     action = asyncio.run(_prepare_database())
     alembic_cfg = _alembic_config()
@@ -53,15 +76,18 @@ def main() -> None:
     if action == "bootstrap_and_stamp":
         command.stamp(alembic_cfg, "head")
         print("Database bootstrap completed: created schema from metadata and stamped head")
+        asyncio.run(_seed_exercises_if_empty())
         return
 
     if action == "stamp_existing_schema":
         command.stamp(alembic_cfg, "head")
         print("Existing schema detected without alembic_version: stamped head")
+        asyncio.run(_seed_exercises_if_empty())
         return
 
     command.upgrade(alembic_cfg, "head")
     print("Alembic upgrade completed")
+    asyncio.run(_seed_exercises_if_empty())
 
 
 if __name__ == "__main__":
