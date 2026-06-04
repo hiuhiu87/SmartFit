@@ -7,6 +7,8 @@ struct CompleteWorkoutView: View {
     @State private var notes = ""
 
     let isLoading: Bool
+    let statusMessage: String?
+    let metricsNote: String?
     let onSubmit: (_ difficultyFeedback: String, _ energyAfter: Int?, _ notes: String?) -> Void
 
     var body: some View {
@@ -19,6 +21,24 @@ struct CompleteWorkoutView: View {
                     Text("Nice work. Your workout will be saved.")
                         .font(AppTypography.body)
                         .foregroundStyle(AppColors.textSecondary)
+
+                    if let statusMessage {
+                        AppCard(cornerRadius: 18, padding: 14) {
+                            HStack(spacing: 12) {
+                                ProgressView()
+                                    .tint(AppColors.primary)
+                                Text(statusMessage)
+                                    .font(AppTypography.body)
+                                    .foregroundStyle(AppColors.textSecondary)
+                            }
+                        }
+                    } else if let metricsNote {
+                        AppCard(cornerRadius: 18, padding: 14) {
+                            Text(metricsNote)
+                                .font(AppTypography.caption)
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                    }
 
                     AppCard(cornerRadius: 22, padding: 18) {
                         VStack(alignment: .leading, spacing: 14) {
@@ -109,7 +129,11 @@ private extension String {
 #if DEBUG
 struct CompleteWorkoutView_Previews: PreviewProvider {
     static var previews: some View {
-        CompleteWorkoutView(isLoading: false) { _, _, _ in }
+        CompleteWorkoutView(
+            isLoading: false,
+            statusMessage: nil,
+            metricsNote: "Health metrics were not available."
+        ) { _, _, _ in }
             .preferredColorScheme(.dark)
     }
 }

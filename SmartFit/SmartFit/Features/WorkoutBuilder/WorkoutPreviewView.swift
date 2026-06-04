@@ -3,6 +3,7 @@ import SwiftUI
 struct WorkoutPreviewView: View {
     @StateObject private var viewModel: WorkoutPreviewViewModel
     private let workoutRepository: WorkoutRepository
+    private let workoutMetricsReader: HealthKitWorkoutMetricsReader?
 
     private let workoutDate: String
     private let readiness: ReadinessResponse?
@@ -25,9 +26,11 @@ struct WorkoutPreviewView: View {
         initialAvailableTimeMinutes: Int,
         initialGenerationMode: String,
         initialAvoidExercisesText: String,
-        initialUserNote: String
+        initialUserNote: String,
+        workoutMetricsReader: HealthKitWorkoutMetricsReader? = nil
     ) {
         self.workoutRepository = workoutRepository
+        self.workoutMetricsReader = workoutMetricsReader
         _viewModel = StateObject(
             wrappedValue: WorkoutPreviewViewModel(
                 workout: workout,
@@ -86,7 +89,8 @@ struct WorkoutPreviewView: View {
                             initialGenerationMode: initialGenerationMode,
                             initialAvoidExercisesText: initialAvoidExercisesText,
                             initialUserNote: initialUserNote,
-                            workoutRepository: workoutRepository
+                            workoutRepository: workoutRepository,
+                            workoutMetricsReader: workoutMetricsReader
                         )
                     } label: {
                         Text("Regenerate")
@@ -125,7 +129,8 @@ struct WorkoutPreviewView: View {
         .navigationDestination(isPresented: $viewModel.navigateToActiveWorkout) {
             ActiveWorkoutView(
                 workout: viewModel.workout,
-                workoutRepository: workoutRepository
+                workoutRepository: workoutRepository,
+                workoutMetricsReader: workoutMetricsReader
             )
         }
     }

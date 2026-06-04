@@ -49,12 +49,13 @@ final class HealthKitManager {
 
         let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)
         let hrv = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)
+        let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate)
         let restingHeartRate = HKObjectType.quantityType(forIdentifier: .restingHeartRate)
         let activeEnergy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)
         let steps = HKObjectType.quantityType(forIdentifier: .stepCount)
         let workouts = HKObjectType.workoutType()
 
-        let readTypes = Set([sleep, hrv, restingHeartRate, activeEnergy, steps, workouts].compactMap { $0 })
+        let readTypes = Set([sleep, hrv, heartRate, restingHeartRate, activeEnergy, steps, workouts].compactMap { $0 })
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             store.requestAuthorization(toShare: [], read: readTypes) { success, error in
                 if let error {

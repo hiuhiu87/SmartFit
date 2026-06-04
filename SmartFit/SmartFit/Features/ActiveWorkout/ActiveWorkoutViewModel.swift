@@ -23,6 +23,8 @@ final class ActiveWorkoutViewModel: ObservableObject {
     @Published var showReplaceExerciseSheet = false
     @Published var isFindingReplacement = false
     @Published var isApplyingReplacement = false
+    @Published var completionStatusMessage: String?
+    @Published var completionMetricsNote: String?
     @Published var replacementErrorMessage: String?
     @Published var replacementOptions: [ReplacementOptionResponse] = []
     @Published var replacementSafetyNote: String?
@@ -31,11 +33,17 @@ final class ActiveWorkoutViewModel: ObservableObject {
     @Published var replacementUserNote = ""
 
     private let workoutRepository: WorkoutRepositoryProtocol
+    private let workoutMetricsReader: HealthKitWorkoutMetricsReader?
     private var restTimerTask: Task<Void, Never>?
 
-    init(workout: WorkoutPlanResponse, workoutRepository: WorkoutRepositoryProtocol) {
+    init(
+        workout: WorkoutPlanResponse,
+        workoutRepository: WorkoutRepositoryProtocol,
+        workoutMetricsReader: HealthKitWorkoutMetricsReader? = nil
+    ) {
         self.workout = workout
         self.workoutRepository = workoutRepository
+        self.workoutMetricsReader = workoutMetricsReader
         self.workoutLogId = workout.workoutLogID
         hydrateInputsForCurrentExercise()
     }
@@ -317,22 +325,32 @@ final class ActiveWorkoutViewModel: ObservableObject {
         }
         isCompleting = true
         errorMessage = nil
+        completionMetricsNote = nil
         defer { isCompleting = false }
 
         let completedAt = Date()
         let durationMinutes = workoutStartedAt.map {
             max(Int(completedAt.timeIntervalSince($0) / 60), 1)
         } ?? 1
+        let startDate = workoutStartedAt ?? completedAt.addingTimeInterval(-Double(durationMinutes * 60))
+        let healthMetrics = await readWorkoutMetrics(
+            startDate: startDate,
+            endDate: completedAt
+        )
 
         do {
+            completionStatusMessage = "Saving workout..."
             let response = try await workoutRepository.completeWorkout(
                 workoutId: workout.workoutID,
                 request: CompleteWorkoutRequest(
                     workoutLogId: workoutLogId,
                     completedAt: Self.apiDateFormatter.string(from: completedAt),
                     durationMinutes: durationMinutes,
-                    caloriesBurned: nil,
-                    avgHeartRate: nil,
+                    caloriesBurned: healthMetrics?.activeEnergyBurned,
+                    avgHeartRate: healthMetrics?.avgHeartRate,
+                    // Backend currently accepts calories and average heart rate only.
+                    maxHeartRate: nil,
+                    minHeartRate: nil,
                     difficultyFeedback: difficultyFeedback,
                     energyAfter: energyAfter,
                     notes: notes
@@ -345,6 +363,7 @@ final class ActiveWorkoutViewModel: ObservableObject {
             errorMessage = readableMessage(for: error, fallback: "Unable to finish workout.")
             showCompleteWorkoutSheet = true
         }
+        completionStatusMessage = nil
     }
 
     func refreshWorkoutDetail() async {
@@ -407,6 +426,51 @@ final class ActiveWorkoutViewModel: ObservableObject {
         restTimerTask = nil
         restSecondsRemaining = 0
         showRestTimer = false
+    }
+
+    private func readWorkoutMetrics(
+        startDate: Date,
+        endDate: Date
+    ) async -> WorkoutHealthMetrics? {
+        guard let workoutMetricsReader else { return nil }
+        completionStatusMessage = "Syncing workout metrics..."
+        do {
+            let metrics = try await withWorkoutMetricsTimeout(seconds: 2) {
+                try await workoutMetricsReader.readMetrics(
+                    startDate: startDate,
+                    endDate: endDate
+                )
+            }
+            guard metrics.hasSendableMetrics else {
+                completionMetricsNote = "Health metrics were not available."
+                return nil
+            }
+            return metrics
+        } catch {
+            completionMetricsNote = "Health metrics were not available."
+            return nil
+        }
+    }
+
+    private func withWorkoutMetricsTimeout<T>(
+        seconds: UInt64,
+        operation: @escaping () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+                throw HealthKitError.noData
+            }
+
+            guard let result = try await group.next() else {
+                throw HealthKitError.noData
+            }
+            group.cancelAll()
+            return result
+        }
     }
 
     private func readableMessage(for error: Error, fallback: String) -> String {

@@ -62,7 +62,8 @@ struct TodayView: View {
                     workoutDate: viewModel.workoutDate,
                     readiness: viewModel.readiness,
                     initialEquipment: appState.currentUser?.equipmentTypes ?? [],
-                    workoutRepository: appState.environment.workoutRepository
+                    workoutRepository: appState.environment.workoutRepository,
+                    workoutMetricsReader: appState.environment.healthKitWorkoutMetricsReader
                 )
             }
             .task {

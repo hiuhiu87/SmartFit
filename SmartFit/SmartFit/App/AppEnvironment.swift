@@ -12,6 +12,7 @@ struct AppEnvironment {
     let historyRepository: HistoryRepository
     let progressRepository: ProgressRepository
     let healthKitManager: HealthKitManager
+    let healthKitWorkoutMetricsReader: HealthKitWorkoutMetricsReader
     let healthSummaryBuilder: HealthSummaryBuilder
 
     var baseURL: URL {
@@ -37,6 +38,7 @@ struct AppEnvironment {
         let historyRepository = HistoryRepository(apiClient: apiClient)
         let progressRepository = ProgressRepository(apiClient: apiClient)
         let healthKitManager = HealthKitManager()
+        let healthKitWorkoutMetricsReader = HealthKitWorkoutMetricsReader()
         let healthSummaryBuilder = HealthSummaryBuilder()
         return AppEnvironment(
             baseURLStore: baseURLStore,
@@ -50,6 +52,7 @@ struct AppEnvironment {
             historyRepository: historyRepository,
             progressRepository: progressRepository,
             healthKitManager: healthKitManager,
+            healthKitWorkoutMetricsReader: healthKitWorkoutMetricsReader,
             healthSummaryBuilder: healthSummaryBuilder
         )
     }

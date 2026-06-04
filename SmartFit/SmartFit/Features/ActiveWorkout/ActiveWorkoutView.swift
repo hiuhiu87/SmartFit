@@ -10,12 +10,14 @@ struct ActiveWorkoutView: View {
     init(
         workout: WorkoutPlanResponse,
         workoutRepository: WorkoutRepository,
+        workoutMetricsReader: HealthKitWorkoutMetricsReader? = nil,
         autoStartOnAppear: Bool = true
     ) {
         _viewModel = StateObject(
             wrappedValue: ActiveWorkoutViewModel(
                 workout: workout,
-                workoutRepository: workoutRepository
+                workoutRepository: workoutRepository,
+                workoutMetricsReader: workoutMetricsReader
             )
         )
         self.autoStartOnAppear = autoStartOnAppear
@@ -111,7 +113,11 @@ struct ActiveWorkoutView: View {
             await viewModel.startWorkoutIfNeeded()
         }
         .sheet(isPresented: $viewModel.showCompleteWorkoutSheet) {
-            CompleteWorkoutView(isLoading: viewModel.isCompleting) { difficultyFeedback, energyAfter, notes in
+            CompleteWorkoutView(
+                isLoading: viewModel.isCompleting,
+                statusMessage: viewModel.completionStatusMessage,
+                metricsNote: viewModel.completionMetricsNote
+            ) { difficultyFeedback, energyAfter, notes in
                 completionDifficultyFeedback = difficultyFeedback
                 completionEnergyAfter = energyAfter
                 completionDurationMinutes = viewModel.workoutStartedAt.map { max(Int(Date().timeIntervalSince($0) / 60), 1) }
@@ -227,6 +233,7 @@ struct ActiveWorkoutView_Previews: PreviewProvider {
             ActiveWorkoutView(
                 workout: .mockAI,
                 workoutRepository: AppEnvironment.bootstrap().workoutRepository,
+                workoutMetricsReader: nil,
                 autoStartOnAppear: false
             )
         }

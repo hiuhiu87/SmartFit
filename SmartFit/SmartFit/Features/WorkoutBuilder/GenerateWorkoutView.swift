@@ -3,6 +3,7 @@ import SwiftUI
 struct GenerateWorkoutView: View {
     @StateObject private var viewModel: GenerateWorkoutViewModel
     private let workoutRepository: WorkoutRepository
+    private let workoutMetricsReader: HealthKitWorkoutMetricsReader?
 
     private let splitOptions: [(String, String, String)] = [
         ("full_body", "Full Body", "Balanced session"),
@@ -47,9 +48,11 @@ struct GenerateWorkoutView: View {
         initialGenerationMode: String = "auto",
         initialAvoidExercisesText: String = "",
         initialUserNote: String = "",
-        workoutRepository: WorkoutRepository
+        workoutRepository: WorkoutRepository,
+        workoutMetricsReader: HealthKitWorkoutMetricsReader? = nil
     ) {
         self.workoutRepository = workoutRepository
+        self.workoutMetricsReader = workoutMetricsReader
         _viewModel = StateObject(
             wrappedValue: GenerateWorkoutViewModel(
                 workoutDate: workoutDate,
@@ -114,7 +117,8 @@ struct GenerateWorkoutView: View {
                 initialAvailableTimeMinutes: viewModel.availableTimeMinutes,
                 initialGenerationMode: viewModel.generationMode,
                 initialAvoidExercisesText: viewModel.avoidExercisesText,
-                initialUserNote: viewModel.userNote
+                initialUserNote: viewModel.userNote,
+                workoutMetricsReader: workoutMetricsReader
             )
         }
     }

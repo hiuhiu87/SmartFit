@@ -84,6 +84,8 @@ struct CompleteWorkoutRequest: Codable, Hashable {
     let durationMinutes: Int?
     let caloriesBurned: Double?
     let avgHeartRate: Double?
+    let maxHeartRate: Double?
+    let minHeartRate: Double?
     let difficultyFeedback: String?
     let energyAfter: Int?
     let notes: String?
@@ -94,6 +96,8 @@ struct CompleteWorkoutRequest: Codable, Hashable {
         case durationMinutes = "duration_minutes"
         case caloriesBurned = "calories_burned"
         case avgHeartRate = "avg_heart_rate"
+        case maxHeartRate = "max_heart_rate"
+        case minHeartRate = "min_heart_rate"
         case difficultyFeedback = "difficulty_feedback"
         case energyAfter = "energy_after"
         case notes
