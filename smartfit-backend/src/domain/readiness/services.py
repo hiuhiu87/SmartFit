@@ -10,7 +10,7 @@ class ReadinessCalculator:
         manual_checkin: ManualCheckin | None,
         hrv_baseline: float | None = None,
         rhr_baseline: float | None = None,
-        recent_load_score: float = 70.0,
+        recent_load_score: float = 75.0,
     ) -> tuple[float, ReadinessCategory, ReadinessRecommendation, float, str]:
         sleep = self._sleep_score(health_summary)
         hrv = self._hrv_score(health_summary, hrv_baseline)
@@ -19,11 +19,15 @@ class ReadinessCalculator:
         load = self._recent_load_score(recent_load_score)
 
         score = round(
-            (sleep * 0.3)
-            + (hrv * 0.25)
-            + (rhr * 0.15)
-            + (self_report * 0.2)
-            + (load * 0.1),
+            self._weighted_score(
+                health_summary=health_summary,
+                manual_checkin=manual_checkin,
+                sleep=sleep,
+                hrv=hrv,
+                rhr=rhr,
+                self_report=self_report,
+                load=load,
+            ),
             2,
         )
         category = self._category(score)
@@ -119,6 +123,40 @@ class ReadinessCalculator:
     def _recent_load_score(self, recent_load_score: float) -> float:
         return max(0.0, min(100.0, recent_load_score))
 
+    def _weighted_score(
+        self,
+        *,
+        health_summary: HealthSummary | None,
+        manual_checkin: ManualCheckin | None,
+        sleep: float,
+        hrv: float,
+        rhr: float,
+        self_report: float,
+        load: float,
+    ) -> float:
+        health_available = any(
+            (
+                health_summary and health_summary.sleep_hours is not None,
+                health_summary and health_summary.heart_rate_variability is not None,
+                health_summary and health_summary.resting_heart_rate is not None,
+            )
+        )
+        load_weight = 0.25 if health_available else 0.55
+        manual_weight = 0.25 if health_available else 0.45
+        components: list[tuple[float, float]] = [(load, load_weight)]
+        if health_summary and health_summary.sleep_hours is not None:
+            components.append((sleep, 0.2))
+        if health_summary and health_summary.heart_rate_variability is not None:
+            components.append((hrv, 0.15))
+        if health_summary and health_summary.resting_heart_rate is not None:
+            components.append((rhr, 0.1))
+        if manual_checkin is not None:
+            components.append((self_report, manual_weight))
+        if len(components) == 1:
+            return load
+        total_weight = sum(weight for _, weight in components)
+        return sum(value * weight for value, weight in components) / total_weight
+
     def _category(self, score: float) -> ReadinessCategory:
         if score >= 85:
             return ReadinessCategory.EXCELLENT
@@ -148,7 +186,7 @@ class ReadinessCalculator:
         hrv_baseline: float | None,
         rhr_baseline: float | None,
     ) -> float:
-        confidence = 0.3
+        confidence = 0.4
         if health_summary and health_summary.sleep_hours is not None:
             confidence += 0.25
         if health_summary and health_summary.heart_rate_variability is not None:
@@ -156,7 +194,7 @@ class ReadinessCalculator:
         if health_summary and health_summary.resting_heart_rate is not None:
             confidence += 0.15 if rhr_baseline is not None else 0.13
         if manual_checkin:
-            confidence += 0.1
+            confidence += 0.15
         return round(min(confidence, 1.0), 2)
 
     def _build_explanation(

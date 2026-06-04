@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "82f4fcb7-3948-4953-b072-37ffb0b6fbef",
     "name": "SmartFit Backend",
-    "description": "Postman collection aligned with the current SmartFit backend routes. Auth, workout, AI, progress, health, readiness, exercise, and user APIs are included. Login and refresh requests automatically store bearer tokens into collection variables.",
+    "description": "Postman collection aligned with the current SmartFit backend routes. Auth, workout, AI, progress, health, readiness, training, exercise, and user APIs are included. Login and refresh requests automatically store bearer tokens into collection variables.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -421,6 +421,30 @@
                 "v1",
                 "readiness",
                 "history"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Training",
+      "item": [
+        {
+          "name": "Get Today Training Context",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/training/context/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "training",
+                "context",
+                "today"
               ]
             }
           }

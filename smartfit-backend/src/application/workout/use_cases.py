@@ -56,6 +56,8 @@ from src.domain.common.exceptions import (
 from src.domain.exercise.entities import Exercise
 from src.domain.exercise.repositories import ExerciseRepository
 from src.domain.readiness.repositories import ReadinessRepository
+from src.domain.training.entities import TrainingRecommendationContext
+from src.domain.training.services import TrainingRecommendationService
 from src.domain.user.repositories import UserRepository
 from src.domain.workout.entities import WorkoutFeedback, WorkoutLog, WorkoutSetLog
 from src.domain.workout.repositories import WorkoutRepository
@@ -84,6 +86,7 @@ class GenerateWorkoutUseCase:
         ai_safety_validator: AIWorkoutSafetyValidator,
         ai_output_mapper: AIWorkoutOutputMapper,
         safety_policy: WorkoutSafetyPolicy,
+        training_service: TrainingRecommendationService | None = None,
     ) -> None:
         self.user_repository = user_repository
         self.readiness_repository = readiness_repository
@@ -95,6 +98,7 @@ class GenerateWorkoutUseCase:
         self.ai_safety_validator = ai_safety_validator
         self.ai_output_mapper = ai_output_mapper
         self.safety_policy = safety_policy
+        self.training_service = training_service
 
     async def execute(self, command: GenerateWorkoutCommand) -> WorkoutPlanDTO:
         profile = await self.user_repository.get_profile(command.user_id)
@@ -143,6 +147,11 @@ class GenerateWorkoutUseCase:
             "focus_muscle": command.focus_muscle,
             "allowed_exercise_slugs": [item.slug for item in allowed[:16]],
         }
+        training_context = await self._build_training_context(command)
+        if training_context is not None:
+            ai_input_payload["training_context"] = self._training_context_payload(
+                training_context
+            )
 
         if command.generation_mode == "rule_based":
             plan = self._generate_rule_based(
@@ -154,6 +163,7 @@ class GenerateWorkoutUseCase:
                 allowed,
                 equipment,
                 profile.injuries,
+                training_context,
             )
         elif command.generation_mode == "gemini":
             try:
@@ -187,6 +197,7 @@ class GenerateWorkoutUseCase:
                 allowed=allowed,
                 usage_date=usage_date,
                 input_payload=ai_input_payload,
+                training_context=training_context,
             )
         else:
             try:
@@ -206,6 +217,7 @@ class GenerateWorkoutUseCase:
                     allowed=allowed,
                     usage_date=usage_date,
                     input_payload=ai_input_payload,
+                    training_context=training_context,
                 )
             except AIUsageLimitExceededError as exc:
                 await self.ai_usage_service.record_log_only(
@@ -229,6 +241,7 @@ class GenerateWorkoutUseCase:
                     allowed,
                     equipment,
                     profile.injuries,
+                    training_context,
                 )
             except (
                 AIConfigurationError,
@@ -256,9 +269,12 @@ class GenerateWorkoutUseCase:
                     allowed,
                     equipment,
                     profile.injuries,
+                    training_context,
                 )
         plan.target_date = command.target_date
-        self.safety_policy.validate(plan, readiness_score=readiness.score)
+        self.safety_policy.validate(
+            plan, readiness_score=plan.readiness_score or readiness.score
+        )
         saved = await self.workout_repository.save_plan(plan)
 
         exercise_map = {exercise.id: exercise for exercise in allowed}
@@ -293,6 +309,7 @@ class GenerateWorkoutUseCase:
         allowed: list[Exercise],
         equipment: list[str],
         injuries: list[str],
+        training_context: TrainingRecommendationContext | None = None,
     ):
         return self.generator.generate(
             user_id=command.user_id,
@@ -307,6 +324,7 @@ class GenerateWorkoutUseCase:
             avoid_exercises=command.avoid_exercises,
             available_equipment=equipment,
             injuries=injuries,
+            training_context=training_context,
         )
 
     async def _generate_with_gemini(
@@ -317,10 +335,14 @@ class GenerateWorkoutUseCase:
         readiness,
         equipment: list[str],
         allowed: list[Exercise],
+        training_context: TrainingRecommendationContext | None = None,
     ):
+        effective_focus = command.focus_muscle
+        if effective_focus is None and training_context is not None:
+            effective_focus = training_context.suggested_focus
         ai_allowed = self._select_ai_allowed_exercises(
             allowed=allowed,
-            focus_muscle=command.focus_muscle,
+            focus_muscle=effective_focus,
             workout_split=command.workout_split,
             avoid_exercises=command.avoid_exercises,
         )
@@ -332,7 +354,7 @@ class GenerateWorkoutUseCase:
             readiness_category=readiness.category.value,
             readiness_recommendation=readiness.recommendation.value,
             workout_split=command.workout_split,
-            focus_muscle=command.focus_muscle,
+            focus_muscle=effective_focus,
             available_time_minutes=command.available_time_minutes,
             equipment=equipment,
             avoid_exercises=command.avoid_exercises,
@@ -403,12 +425,19 @@ class GenerateWorkoutUseCase:
         allowed: list[Exercise],
         usage_date,
         input_payload: dict,
+        training_context: TrainingRecommendationContext | None = None,
     ):
         request_id = uuid4()
         started = perf_counter()
         try:
             plan = await self._generate_with_gemini(
-                command, goal, training_level, readiness, equipment, allowed
+                command,
+                goal,
+                training_level,
+                readiness,
+                equipment,
+                allowed,
+                training_context,
             )
         except (
             AIConfigurationError,
@@ -484,6 +513,24 @@ class GenerateWorkoutUseCase:
             output_payload,
         )
         return plan
+
+    async def _build_training_context(
+        self, command: GenerateWorkoutCommand
+    ) -> TrainingRecommendationContext | None:
+        if self.training_service is None:
+            return None
+        return await self.training_service.build_context(
+            command.user_id, command.target_date
+        )
+
+    def _training_context_payload(self, context: TrainingRecommendationContext) -> dict:
+        return {
+            "load_score": context.recent_load.load_score,
+            "load_level": context.recent_load.load_level,
+            "suggested_focus": context.suggested_focus,
+            "avoid_focus": context.avoid_focus,
+            "reason": context.reason,
+        }
 
     def _select_ai_allowed_exercises(
         self,

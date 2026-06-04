@@ -12,6 +12,7 @@ from src.domain.health.repositories import HealthRepository
 from src.domain.readiness.entities import ReadinessScore
 from src.domain.readiness.repositories import ReadinessRepository
 from src.domain.readiness.services import ReadinessCalculator
+from src.domain.training.services import TrainingLoadCalculator
 
 
 class CalculateReadinessUseCase:
@@ -20,10 +21,12 @@ class CalculateReadinessUseCase:
         readiness_repository: ReadinessRepository,
         health_repository: HealthRepository,
         calculator: ReadinessCalculator | None = None,
+        training_load_calculator: TrainingLoadCalculator | None = None,
     ) -> None:
         self.readiness_repository = readiness_repository
         self.health_repository = health_repository
         self.calculator = calculator or ReadinessCalculator()
+        self.training_load_calculator = training_load_calculator
 
     async def execute(self, command: CalculateReadinessCommand) -> ReadinessDTO:
         health_summary = await self.health_repository.get_summary_by_date(
@@ -32,7 +35,18 @@ class CalculateReadinessUseCase:
         manual_checkin = await self.health_repository.get_manual_checkin_by_date(
             command.user_id, command.date
         )
-        if health_summary is None and manual_checkin is None:
+        recent_load_score = 70.0
+        if self.training_load_calculator is not None:
+            recent_load = await self.training_load_calculator.calculate_recent_load(
+                command.user_id, to_date=command.date
+            )
+            recent_load_score = max(0.0, 100.0 - recent_load.load_score)
+
+        if (
+            health_summary is None
+            and manual_checkin is None
+            and self.training_load_calculator is None
+        ):
             raise ValidationError(
                 "Cannot calculate readiness without a health summary or manual check-in"
             )
@@ -53,7 +67,7 @@ class CalculateReadinessUseCase:
                 manual_checkin=manual_checkin,
                 hrv_baseline=hrv_baseline,
                 rhr_baseline=rhr_baseline,
-                recent_load_score=70.0,
+                recent_load_score=recent_load_score,
             )
         )
         now = datetime.now(timezone.utc)

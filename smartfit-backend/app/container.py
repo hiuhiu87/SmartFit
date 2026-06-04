@@ -26,6 +26,7 @@ from src.application.readiness.use_cases import (
     GetReadinessHistoryUseCase,
     GetTodayReadinessUseCase,
 )
+from src.application.training.use_cases import GetTodayTrainingContextUseCase
 from src.application.user.use_cases import (
     GetCurrentUserProfileUseCase,
     UpdateUserEquipmentUseCase,
@@ -42,6 +43,12 @@ from src.application.workout.use_cases import (
 from src.domain.ai.ports import AIWorkoutGeneratorPort
 from src.domain.ai.services import AIUsagePolicy
 from src.domain.readiness.services import ReadinessCalculator
+from src.domain.training.services import (
+    ExercisePerformanceAnalyzer,
+    MuscleFatigueCalculator,
+    TrainingLoadCalculator,
+    TrainingRecommendationService,
+)
 from src.domain.workout.services import (
     RuleBasedWorkoutGenerator,
     WorkoutSafetyPolicy,
@@ -82,6 +89,9 @@ from src.domain.progress.services import ProgressCalculator
 from src.infrastructure.repositories.subscription_repository import (
     SQLModelSubscriptionRepository,
 )
+from src.infrastructure.repositories.training_repository import (
+    SQLModelTrainingRepository,
+)
 
 
 class Container:
@@ -93,6 +103,7 @@ class Container:
         self.workout_safety_policy = WorkoutSafetyPolicy()
         self.workout_volume_calculator = WorkoutVolumeCalculator()
         self.progress_calculator = ProgressCalculator()
+        self.exercise_performance_analyzer = ExercisePerformanceAnalyzer()
         self.ai_usage_policy = AIUsagePolicy()
         self.gemini_prompt_builder = GeminiPromptBuilder()
         self.gemini_chat_prompt_builder = GeminiChatPromptBuilder()
@@ -160,6 +171,21 @@ class Container:
     ) -> SQLModelWorkoutRepository:
         return SQLModelWorkoutRepository(session)
 
+    def get_training_repository(
+        self, session: AsyncSession
+    ) -> SQLModelTrainingRepository:
+        return SQLModelTrainingRepository(session)
+
+    def get_training_recommendation_service(
+        self, session: AsyncSession
+    ) -> TrainingRecommendationService:
+        repository = self.get_training_repository(session)
+        return TrainingRecommendationService(
+            load_calculator=TrainingLoadCalculator(repository),
+            fatigue_calculator=MuscleFatigueCalculator(repository),
+            performance_analyzer=self.exercise_performance_analyzer,
+        )
+
     def get_progress_repository(
         self, session: AsyncSession
     ) -> SQLModelProgressRepository:
@@ -217,6 +243,7 @@ class Container:
             SQLModelReadinessRepository(session),
             SQLModelHealthRepository(session),
             self.readiness_calculator,
+            TrainingLoadCalculator(self.get_training_repository(session)),
         )
 
     def get_today_readiness_use_case(
@@ -248,6 +275,14 @@ class Container:
             ai_safety_validator=self.ai_workout_safety_validator,
             ai_output_mapper=self.ai_workout_output_mapper,
             safety_policy=self.workout_safety_policy,
+            training_service=self.get_training_recommendation_service(session),
+        )
+
+    def get_today_training_context_use_case(
+        self, session: AsyncSession
+    ) -> GetTodayTrainingContextUseCase:
+        return GetTodayTrainingContextUseCase(
+            self.get_training_recommendation_service(session)
         )
 
     def get_gemini_prompt_builder(self) -> GeminiPromptBuilder:
