@@ -238,7 +238,7 @@ Important notes:
 
 What the current setup does:
 
-- runs `alembic upgrade head` on startup
+- bootstraps a brand-new empty database from current SQLModel metadata, otherwise runs `alembic upgrade head`
 - seeds the exercise catalog once via Render `initialDeployHook`
 - exposes `GET /healthz` for Render health checks
 - accepts Render Postgres connection strings directly via `DATABASE_URL`
@@ -255,6 +255,13 @@ Notes for seeding:
 - normal restarts and redeploys no longer reseed the exercise catalog
 - Render runs the seed once after the first successful deploy via `initialDeployHook`
 - if you ever need to reseed manually, open a Render shell for the service and run `python -m src.infrastructure.seed.seed_exercises`
+
+Notes for migrations:
+
+- this repo currently contains early Alembic revisions that do not fully build a fresh database from scratch
+- Render startup therefore uses `python -m app.render_startup`
+- if the database is empty, it creates the schema from current metadata and stamps Alembic to `head`
+- if the database already has tables, it runs normal `alembic upgrade head`
 
 This will create a mock user and related records for:
 
