@@ -21,6 +21,7 @@ final class ActiveWorkoutViewModel: ObservableObject {
     @Published var completedResponse: CompleteWorkoutResponse?
     @Published var showCompleteWorkoutSheet = false
     @Published var showReplaceExerciseSheet = false
+    @Published var showAIChatSheet = false
     @Published var isFindingReplacement = false
     @Published var isApplyingReplacement = false
     @Published var completionStatusMessage: String?

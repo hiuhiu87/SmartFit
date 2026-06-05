@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ActiveWorkoutView: View {
     @StateObject private var viewModel: ActiveWorkoutViewModel
+    @EnvironmentObject private var appState: AppState
     @State private var completionDifficultyFeedback: String?
     @State private var completionEnergyAfter: Int?
     @State private var completionDurationMinutes: Int?
@@ -91,9 +92,15 @@ struct ActiveWorkoutView: View {
                     }
 
                     HStack(spacing: 12) {
+                        SecondaryButton(title: "Coach", systemImage: "bubble.left.and.bubble.right.fill") {
+                            viewModel.showAIChatSheet = true
+                        }
                         SecondaryButton(title: "Replace", systemImage: "arrow.triangle.2.circlepath") {
                             viewModel.openReplaceExercise()
                         }
+                    }
+
+                    HStack(spacing: 12) {
                         SecondaryButton(title: "End", systemImage: "stop.fill") {
                             viewModel.showCompleteWorkoutSheet = true
                         }
@@ -159,6 +166,13 @@ struct ActiveWorkoutView: View {
                     }
                 )
             }
+        }
+        .sheet(isPresented: $viewModel.showAIChatSheet) {
+            AIChatView(
+                workout: viewModel.workout,
+                selectedExercise: viewModel.currentExercise,
+                repository: appState.environment.aiChatRepository
+            )
         }
         .navigationDestination(isPresented: Binding(
             get: { viewModel.completedResponse != nil },
