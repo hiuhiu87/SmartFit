@@ -21,6 +21,8 @@ from src.application.progress.use_cases import (
     GetProgressOverviewUseCase,
     GetWeeklyReportUseCase,
 )
+from src.application.program.generator import ProgramWorkoutGenerator
+from src.application.program.use_cases import ProgramService
 from src.application.readiness.use_cases import (
     CalculateReadinessUseCase,
     GetReadinessHistoryUseCase,
@@ -45,6 +47,7 @@ from src.application.workout.use_cases import (
 from src.domain.ai.ports import AIWorkoutGeneratorPort
 from src.domain.ai.services import AIUsagePolicy
 from src.domain.progression.services import ProgressionService
+from src.domain.program.services import ProgramScheduler, ProgramTemplateFactory
 from src.domain.readiness.services import ReadinessCalculator
 from src.domain.training.services import (
     ExercisePerformanceAnalyzer,
@@ -91,6 +94,7 @@ from src.infrastructure.repositories.progress_repository import (
 from src.infrastructure.repositories.progression_repository import (
     SQLModelProgressionRepository,
 )
+from src.infrastructure.repositories.program_repository import SQLModelProgramRepository
 from src.infrastructure.security.jwt_provider import JWTProvider
 from src.infrastructure.security.password_hasher import PasswordHasher
 from src.domain.progress.services import ProgressCalculator
@@ -108,6 +112,8 @@ class Container:
         self.password_hasher = PasswordHasher()
         self.jwt_provider = JWTProvider()
         self.progression_service = ProgressionService()
+        self.program_template_factory = ProgramTemplateFactory()
+        self.program_scheduler = ProgramScheduler()
         self.workout_generator = RuleBasedWorkoutGenerator(
             progression_service=self.progression_service
         )
@@ -201,6 +207,23 @@ class Container:
         self, session: AsyncSession
     ) -> SQLModelProgressRepository:
         return SQLModelProgressRepository(session)
+
+    def get_program_repository(
+        self, session: AsyncSession
+    ) -> SQLModelProgramRepository:
+        return SQLModelProgramRepository(session)
+
+    def program_service(self, session: AsyncSession) -> ProgramService:
+        repository = self.get_program_repository(session)
+        return ProgramService(
+            repository=repository,
+            user_repository=self.get_user_repository(session),
+            template_factory=self.program_template_factory,
+            scheduler=self.program_scheduler,
+            workout_generator=ProgramWorkoutGenerator(
+                self.generate_workout_use_case(session), repository
+            ),
+        )
 
     def get_progression_repository(
         self, session: AsyncSession
@@ -335,7 +358,10 @@ class Container:
         return GetWorkoutDetailUseCase(self.get_workout_repository(session))
 
     def start_workout_use_case(self, session: AsyncSession) -> StartWorkoutUseCase:
-        return StartWorkoutUseCase(self.get_workout_repository(session))
+        return StartWorkoutUseCase(
+            self.get_workout_repository(session),
+            self.get_program_repository(session),
+        )
 
     def log_workout_set_use_case(self, session: AsyncSession) -> LogWorkoutSetUseCase:
         return LogWorkoutSetUseCase(self.get_workout_repository(session))
@@ -361,7 +387,9 @@ class Container:
         self, session: AsyncSession
     ) -> CompleteWorkoutUseCase:
         return CompleteWorkoutUseCase(
-            self.get_workout_repository(session), self.workout_volume_calculator
+            self.get_workout_repository(session),
+            self.workout_volume_calculator,
+            self.get_program_repository(session),
         )
 
     def get_workout_history_use_case(

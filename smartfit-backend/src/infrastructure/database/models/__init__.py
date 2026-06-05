@@ -12,6 +12,12 @@ from src.infrastructure.database.models.health_model import (
     HealthSummaryModel,
     ManualCheckinModel,
 )
+from src.infrastructure.database.models.program_model import (
+    ProgramTemplateSlotModel,
+    ProgramWorkoutInstanceModel,
+    ProgramWorkoutTemplateModel,
+    TrainingProgramModel,
+)
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
 from src.infrastructure.database.models.subscription_model import SubscriptionModel
 from src.infrastructure.database.models.user_model import (
@@ -39,8 +45,12 @@ __all__ = [
     "HealthSummaryModel",
     "ManualCheckinModel",
     "NotificationSettingModel",
+    "ProgramTemplateSlotModel",
+    "ProgramWorkoutInstanceModel",
+    "ProgramWorkoutTemplateModel",
     "ReadinessScoreModel",
     "SubscriptionModel",
+    "TrainingProgramModel",
     "UserEquipmentModel",
     "UserModel",
     "UserPreferenceModel",

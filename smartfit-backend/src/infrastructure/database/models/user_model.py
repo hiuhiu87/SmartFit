@@ -42,6 +42,7 @@ class UserProfileModel(SQLModel, table=True):
     height_cm: float | None = Field(default=None)
     weight_kg: float | None = Field(default=None)
     training_level: str = Field(default="beginner", max_length=50)
+    training_style: str = Field(default="balanced", max_length=50)
     primary_goal: str = Field(default="general_health", max_length=50)
     injuries: list[str] = Field(
         default_factory=list, sa_column=Column(POSTGRES_STRING_ARRAY, nullable=False)

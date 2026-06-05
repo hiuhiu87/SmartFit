@@ -9,6 +9,7 @@ from src.domain.common.enums import (
     WorkoutDecision,
     WorkoutSource,
     WorkoutStatus,
+    TrainingStyle,
 )
 from src.domain.common.exceptions import ValidationError
 from src.domain.exercise.entities import Exercise
@@ -19,8 +20,10 @@ from src.domain.progression.entities import (
 from src.domain.progression.services import ProgressionService
 from src.domain.training.entities import TrainingRecommendationContext
 from src.domain.workout.exercise_selection_policy import ExerciseSelectionPolicy
+from src.domain.workout.equipment_diversity_policy import EquipmentDiversityPolicy
 from src.domain.workout.entities import WorkoutPlan, WorkoutPlanExercise, WorkoutSetLog
 from src.domain.workout.template_resolver import WorkoutTemplateResolver
+from src.domain.workout.training_style_policy import TrainingStylePolicy
 from src.domain.workout.templates import WorkoutSlot, WorkoutTemplate
 
 
@@ -32,10 +35,14 @@ class RuleBasedWorkoutGenerator:
         template_resolver: WorkoutTemplateResolver | None = None,
         selection_policy: ExerciseSelectionPolicy | None = None,
         progression_service: ProgressionService | None = None,
+        diversity_policy: EquipmentDiversityPolicy | None = None,
+        training_style_policy: TrainingStylePolicy | None = None,
     ) -> None:
         self.template_resolver = template_resolver or WorkoutTemplateResolver()
         self.selection_policy = selection_policy or ExerciseSelectionPolicy()
         self.progression_service = progression_service or ProgressionService()
+        self.diversity_policy = diversity_policy or EquipmentDiversityPolicy()
+        self.training_style_policy = training_style_policy or TrainingStylePolicy()
 
     def generate(
         self,
@@ -55,6 +62,7 @@ class RuleBasedWorkoutGenerator:
         target_date: date_type | None = None,
         recent_workouts: list[WorkoutPlan] | None = None,
         progression_histories: dict[UUID, ExercisePerformanceHistory] | None = None,
+        training_style: str = TrainingStyle.BALANCED.value,
     ) -> WorkoutPlan:
         available_equipment = self._normalize_equipment(available_equipment)
         template_focus = self._resolve_training_focus(
@@ -70,6 +78,9 @@ class RuleBasedWorkoutGenerator:
             readiness_score=adjusted_readiness_score,
             recent_workouts=recent_workouts,
             avoid_recent_repetition=focus_muscle is None,
+        )
+        template = self.training_style_policy.adjust_slot_priority(
+            template, training_style
         )
         decision = self._decision(adjusted_readiness_score)
         if adjusted_readiness_score < 20:
@@ -93,6 +104,7 @@ class RuleBasedWorkoutGenerator:
                 goal=goal,
                 training_level=training_level,
                 injuries=injuries or [],
+                training_style=training_style,
             )
         ]
         selected_pairs = self._select_template_exercises(
@@ -103,6 +115,7 @@ class RuleBasedWorkoutGenerator:
             avoid_exercises=avoid_exercises,
             readiness_score=adjusted_readiness_score,
             available_time_minutes=available_time_minutes,
+            training_style=training_style,
         )
         selected_pairs = self._fill_to_target_count(
             template=template,
@@ -113,6 +126,7 @@ class RuleBasedWorkoutGenerator:
             avoid_exercises=avoid_exercises,
             readiness_score=adjusted_readiness_score,
             available_time_minutes=available_time_minutes,
+            training_style=training_style,
         )
         if (
             training_context is not None
@@ -140,6 +154,7 @@ class RuleBasedWorkoutGenerator:
                 readiness_score=adjusted_readiness_score,
                 training_context=training_context,
                 progression_histories=progression_histories,
+                training_style=training_style,
             )
             for index, (slot, exercise) in enumerate(selected_pairs)
         ]
@@ -165,6 +180,9 @@ class RuleBasedWorkoutGenerator:
                 adjusted_readiness_score,
                 readiness_recommendation,
                 training_context,
+                training_style,
+                selected_pairs,
+                available_equipment,
             ),
             safety_note=self.SAFETY_NOTE,
             exercises=plan_exercises,
@@ -182,10 +200,11 @@ class RuleBasedWorkoutGenerator:
         readiness_score: int,
         training_context: TrainingRecommendationContext | None,
         progression_histories: dict[UUID, ExercisePerformanceHistory] | None,
+        training_style: str,
     ) -> WorkoutPlanExercise:
         target_sets = self._sets_for_slot(slot, readiness_score)
-        target_reps = self._reps_for_slot(slot, goal, readiness_score)
-        target_rpe = self._rpe_for_slot(slot, readiness_score)
+        target_reps = self._reps_for_slot(slot, goal, readiness_score, training_style)
+        target_rpe = self._rpe_for_slot(slot, readiness_score, training_style)
         target_weight = self._suggested_weight(exercise, training_context)
         notes = exercise.safety_notes or exercise.instruction
 
@@ -222,7 +241,9 @@ class RuleBasedWorkoutGenerator:
             target_reps=target_reps,
             target_rpe=target_rpe,
             target_weight=target_weight,
-            rest_seconds=self._rest_for_slot(slot, goal, readiness_score),
+            rest_seconds=self._rest_for_slot(
+                slot, goal, readiness_score, training_style
+            ),
             notes=notes,
         )
 
@@ -265,12 +286,17 @@ class RuleBasedWorkoutGenerator:
         avoid_exercises: list[str],
         readiness_score: int,
         available_time_minutes: int,
+        training_style: str,
     ) -> list[tuple[WorkoutSlot, Exercise]]:
         selected: list[Exercise] = []
         selected_pairs: list[tuple[WorkoutSlot, Exercise]] = []
         for slot in template.slots:
             if not self._should_include_slot(
-                slot, readiness_score, available_time_minutes, available_equipment
+                slot,
+                readiness_score,
+                available_time_minutes,
+                available_equipment,
+                training_style,
             ):
                 continue
             exercise = self.selection_policy.select_exercise_for_slot(
@@ -281,6 +307,7 @@ class RuleBasedWorkoutGenerator:
                 avoid_exercises=avoid_exercises,
                 already_selected=selected,
                 template_id=template.id,
+                training_style=training_style,
             )
             if exercise is None:
                 if slot.required:
@@ -361,6 +388,7 @@ class RuleBasedWorkoutGenerator:
         avoid_exercises: list[str],
         readiness_score: int,
         available_time_minutes: int,
+        training_style: str,
     ) -> list[tuple[WorkoutSlot, Exercise]]:
         target_count = self._target_exercise_count(
             template=template,
@@ -377,7 +405,11 @@ class RuleBasedWorkoutGenerator:
             for slot in self._fill_slots_for_template(template)
             if slot.slot_type not in selected_slot_types
             and self._should_include_slot(
-                slot, readiness_score, available_time_minutes, available_equipment
+                slot,
+                readiness_score,
+                available_time_minutes,
+                available_equipment,
+                training_style,
             )
         ]
 
@@ -392,6 +424,7 @@ class RuleBasedWorkoutGenerator:
                 avoid_exercises=avoid_exercises,
                 already_selected=selected,
                 template_id=template.id,
+                training_style=training_style,
             )
             if exercise is None:
                 continue
@@ -589,7 +622,13 @@ class RuleBasedWorkoutGenerator:
         readiness_score: int,
         available_time_minutes: int,
         available_equipment: list[str],
+        training_style: str = "balanced",
     ) -> bool:
+        if (
+            "cardio" in slot.movement_patterns
+            and training_style == TrainingStyle.STRENGTH.value
+        ):
+            return False
         if slot.required:
             return True
         if readiness_score < 60:
@@ -605,6 +644,8 @@ class RuleBasedWorkoutGenerator:
                 EquipmentType.BODYWEIGHT.value,
                 "bike",
                 "stationary_bike",
+                EquipmentType.ROWING_MACHINE.value,
+                EquipmentType.ELLIPTICAL.value,
             }
         )
 
@@ -619,18 +660,31 @@ class RuleBasedWorkoutGenerator:
             return min(2, slot.min_sets)
         return 1
 
-    def _rpe_for_slot(self, slot: WorkoutSlot, readiness_score: int) -> int:
+    def _rpe_for_slot(
+        self, slot: WorkoutSlot, readiness_score: int, training_style: str
+    ) -> int:
         if readiness_score >= 80:
-            return min(8, slot.target_rpe + 1)
+            value = min(8, slot.target_rpe + 1)
+            return min(value, 7) if training_style == "returning" else value
         if readiness_score >= 60:
-            return slot.target_rpe
+            return (
+                min(slot.target_rpe, 7)
+                if training_style == "returning"
+                else slot.target_rpe
+            )
         if readiness_score >= 40:
             return min(6, slot.target_rpe)
         if readiness_score >= 20:
             return min(4, slot.target_rpe)
         return min(3, slot.target_rpe)
 
-    def _reps_for_slot(self, slot: WorkoutSlot, goal: str, readiness_score: int) -> str:
+    def _reps_for_slot(
+        self,
+        slot: WorkoutSlot,
+        goal: str,
+        readiness_score: int,
+        training_style: str,
+    ) -> str:
         if "cardio" in slot.movement_patterns:
             if self._is_lean_goal(goal) and readiness_score >= 40:
                 return "10-15 minutes"
@@ -641,11 +695,24 @@ class RuleBasedWorkoutGenerator:
             return "12-15"
         if goal == Goal.STRENGTH.value:
             return "5-8"
+        if training_style == "strength" and {
+            "main_compound",
+            "secondary_compound",
+        } & set(slot.exercise_roles):
+            return "5-8"
+        if training_style == "hypertrophy":
+            return "8-15"
         if goal == Goal.ENDURANCE.value:
             return "12-20"
         return slot.reps
 
-    def _rest_for_slot(self, slot: WorkoutSlot, goal: str, readiness_score: int) -> int:
+    def _rest_for_slot(
+        self,
+        slot: WorkoutSlot,
+        goal: str,
+        readiness_score: int,
+        training_style: str,
+    ) -> int:
         if readiness_score < 40:
             return min(slot.rest_seconds, 45)
         if self._is_lean_goal(goal):
@@ -655,6 +722,13 @@ class RuleBasedWorkoutGenerator:
             ):
                 return min(slot.rest_seconds, 45)
             return min(slot.rest_seconds, 60)
+        if training_style == "conditioning":
+            return min(slot.rest_seconds, 60)
+        if training_style == "strength" and {
+            "main_compound",
+            "secondary_compound",
+        } & set(slot.exercise_roles):
+            return max(slot.rest_seconds, 120)
         return slot.rest_seconds
 
     def _planned_duration(
@@ -762,12 +836,22 @@ class RuleBasedWorkoutGenerator:
         goal: str,
         training_level: str,
         injuries: list[str],
+        training_style: str = "balanced",
     ) -> bool:
         name = exercise.name.lower()
         movement = exercise.movement_pattern or exercise.movement_type or ""
         equipment = exercise.equipment_type.value
         normalized_injuries = " ".join(item.lower() for item in injuries)
-        beginner_or_returner = training_level == TrainingLevel.BEGINNER.value
+        beginner_or_returner = (
+            training_level == TrainingLevel.BEGINNER.value
+            or training_style == TrainingStyle.RETURNING.value
+        )
+
+        if training_style == TrainingStyle.RETURNING.value and (
+            exercise.training_level == TrainingLevel.ADVANCED
+            or exercise.joint_stress == "high"
+        ):
+            return True
 
         if beginner_or_returner and (
             "barbell back squat" in name
@@ -823,6 +907,9 @@ class RuleBasedWorkoutGenerator:
         readiness_score: int,
         readiness_recommendation: str,
         training_context: TrainingRecommendationContext | None = None,
+        training_style: str = "balanced",
+        selected_pairs: list[tuple[WorkoutSlot, Exercise]] | None = None,
+        available_equipment: list[str] | None = None,
     ) -> str:
         training_reason = (
             f" Training context: {training_context.reason}"
@@ -834,10 +921,21 @@ class RuleBasedWorkoutGenerator:
                 "Rule-based programming selected a recovery template based on low "
                 f"readiness.{training_reason}"
             )
+        warnings = self.diversity_policy.validate_final_mix(
+            [exercise for _, exercise in selected_pairs or []],
+            available_equipment or [],
+            template.id,
+        )
+        diversity_text = (
+            " Equipment diversity was balanced across available categories."
+            if not warnings
+            else f" Equipment mix note: {' '.join(warnings)}"
+        )
         return (
             f"Rule-based programming selected the {template.title} template and adjusted "
-            f"volume for readiness recommendation '{readiness_recommendation}'."
-            f"{training_reason}"
+            f"volume for readiness recommendation '{readiness_recommendation}' "
+            f"using {training_style.replace('_', ' ')} style."
+            f"{diversity_text}{training_reason}"
         )
 
 

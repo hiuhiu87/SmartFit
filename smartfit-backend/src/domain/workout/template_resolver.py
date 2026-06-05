@@ -22,6 +22,8 @@ class WorkoutTemplateResolver:
         if avoid_recent_repetition:
             focus = self._rotate_focus_if_needed(focus, recent_workouts or [])
 
+        if focus in BUILT_IN_TEMPLATES:
+            return BUILT_IN_TEMPLATES[focus]
         if focus in {"upper_body_pull", "back"}:
             return BUILT_IN_TEMPLATES["upper_pull_emphasis"]
         if focus in {"upper_body_push", "chest", "shoulders"}:

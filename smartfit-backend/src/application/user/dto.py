@@ -10,6 +10,7 @@ class UserProfileDTO:
     height_cm: float | None = None
     weight_kg: float | None = None
     training_level: str | None = None
+    training_style: str = "balanced"
     primary_goal: str | None = None
     injuries: list[str] = field(default_factory=list)
     notes: str | None = None

@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from time import perf_counter
 from uuid import UUID, uuid4
+import logging
+
+logger = logging.getLogger(__name__)
 
 from src.application.ai.commands import AIChatCommand
 from src.application.ai.dto import (
@@ -234,8 +237,15 @@ class AIChatUseCase:
             AIProviderTimeoutError,
             AIRateLimitError,
             AIUnsafeOutputError,
+            Exception,
         ) as exc:
             latency_ms = int((perf_counter() - started) * 1000)
+            print(f"\n\n[WARNING] AI CHAT GENERATION FAILED, FALLING BACK TO SAFE RESPONSE. ERROR: {exc}\n\n", flush=True)
+            logger.exception(
+                "AI chat generation failed, falling back to safe response. Error: %s - %s",
+                exc.__class__.__name__,
+                exc,
+            )
             result = self._build_safe_fallback(message)
             await self.ai_usage_service.record(
                 RecordAIUsageCommand(

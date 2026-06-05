@@ -1,4 +1,10 @@
 from fastapi import FastAPI
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 
 from src.presentation.api.router import api_router
 from src.presentation.exception_handlers import register_exception_handlers

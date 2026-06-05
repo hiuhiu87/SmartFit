@@ -63,6 +63,8 @@ from src.domain.exercise.entities import Exercise
 from src.domain.exercise.repositories import ExerciseRepository
 from src.domain.progression.entities import ExercisePerformanceHistory
 from src.domain.progression.repositories import ProgressionRepository
+from src.domain.program.entities import ProgramWorkoutStatus
+from src.domain.program.repositories import ProgramRepository
 from src.domain.readiness.repositories import ReadinessRepository
 from src.domain.training.entities import TrainingRecommendationContext
 from src.domain.training.services import TrainingRecommendationService
@@ -167,10 +169,12 @@ class GenerateWorkoutUseCase:
                 training_context
             )
 
+        goal = command.goal_override or profile.primary_goal.value
+        training_style = command.training_style_override or profile.training_style.value
         if command.generation_mode == "rule_based":
             plan = self._generate_rule_based(
                 command,
-                profile.primary_goal.value,
+                goal,
                 profile.training_level.value,
                 readiness.score,
                 readiness.recommendation.value,
@@ -180,6 +184,7 @@ class GenerateWorkoutUseCase:
                 training_context,
                 recent_workouts,
                 progression_histories,
+                training_style,
             )
         elif command.generation_mode in {"gemini", "openrouter"}:
             try:
@@ -206,7 +211,7 @@ class GenerateWorkoutUseCase:
                 raise
             plan = await self._generate_with_ai_with_logging(
                 command=command,
-                goal=profile.primary_goal.value,
+                goal=goal,
                 training_level=profile.training_level.value,
                 readiness=readiness,
                 equipment=equipment,
@@ -226,7 +231,7 @@ class GenerateWorkoutUseCase:
                 )
                 plan = await self._generate_with_ai_with_logging(
                     command=command,
-                    goal=profile.primary_goal.value,
+                    goal=goal,
                     training_level=profile.training_level.value,
                     readiness=readiness,
                     equipment=equipment,
@@ -236,6 +241,11 @@ class GenerateWorkoutUseCase:
                     training_context=training_context,
                 )
             except AIUsageLimitExceededError as exc:
+                logger.error(
+                    "AI usage limit exceeded for user %s, falling back to rule-based generation. Error: %s",
+                    command.user_id,
+                    exc,
+                )
                 await self.ai_usage_service.record_log_only(
                     self._build_ai_request_log(
                         request_id=uuid4(),
@@ -250,7 +260,7 @@ class GenerateWorkoutUseCase:
                 )
                 plan = self._generate_rule_based(
                     command,
-                    profile.primary_goal.value,
+                    goal,
                     profile.training_level.value,
                     readiness.score,
                     readiness.recommendation.value,
@@ -260,6 +270,7 @@ class GenerateWorkoutUseCase:
                     training_context,
                     recent_workouts,
                     progression_histories,
+                    training_style,
                 )
             except (
                 AIConfigurationError,
@@ -269,8 +280,10 @@ class GenerateWorkoutUseCase:
                 AIInvalidOutputError,
                 AIUnsafeOutputError,
                 AIExerciseMappingError,
+                Exception,
             ) as exc:
-                logger.warning(
+                print(f"\n\n[WARNING] AI WORKOUT GENERATION FAILED, FALLING BACK TO RULE-BASED. ERROR: {exc}\n\n", flush=True)
+                logger.exception(
                     "AI workout generation failed for user %s mode=%s, falling back to rule-based. error_type=%s error=%s input_payload=%s",
                     command.user_id,
                     command.generation_mode,
@@ -280,7 +293,7 @@ class GenerateWorkoutUseCase:
                 )
                 plan = self._generate_rule_based(
                     command,
-                    profile.primary_goal.value,
+                    goal,
                     profile.training_level.value,
                     readiness.score,
                     readiness.recommendation.value,
@@ -290,6 +303,7 @@ class GenerateWorkoutUseCase:
                     training_context,
                     recent_workouts,
                     progression_histories,
+                    training_style,
                 )
         plan.target_date = command.target_date
         self.safety_policy.validate(
@@ -332,6 +346,7 @@ class GenerateWorkoutUseCase:
         training_context: TrainingRecommendationContext | None = None,
         recent_workouts=None,
         progression_histories: dict[UUID, ExercisePerformanceHistory] | None = None,
+        training_style: str = "balanced",
     ):
         return self.generator.generate(
             user_id=command.user_id,
@@ -350,6 +365,7 @@ class GenerateWorkoutUseCase:
             target_date=command.target_date,
             recent_workouts=recent_workouts,
             progression_histories=progression_histories,
+            training_style=training_style,
         )
 
     async def _generate_with_ai(
@@ -471,9 +487,11 @@ class GenerateWorkoutUseCase:
             AIInvalidOutputError,
             AIUnsafeOutputError,
             AIExerciseMappingError,
+            Exception,
         ) as exc:
             latency_ms = int((perf_counter() - started) * 1000)
-            logger.warning(
+            print(f"\n\n[WARNING] AI WORKOUT GENERATION FAILED (mode={command.generation_mode}). ERROR: {exc}\n\n", flush=True)
+            logger.exception(
                 "AI workout generation failed for user %s mode=%s latency_ms=%s error_type=%s error=%s input_payload=%s",
                 command.user_id,
                 command.generation_mode,
@@ -769,8 +787,13 @@ class GetWorkoutDetailUseCase:
 
 
 class StartWorkoutUseCase:
-    def __init__(self, workout_repository: WorkoutRepository) -> None:
+    def __init__(
+        self,
+        workout_repository: WorkoutRepository,
+        program_repository: ProgramRepository | None = None,
+    ) -> None:
         self.workout_repository = workout_repository
+        self.program_repository = program_repository
 
     async def execute(self, command: StartWorkoutCommand) -> StartWorkoutDTO:
         plan = await self.workout_repository.get_plan_by_id(command.workout_id)
@@ -786,6 +809,7 @@ class StartWorkoutUseCase:
             if plan.status != WorkoutStatus.STARTED:
                 plan.start()
                 await self.workout_repository.update_plan(plan)
+            await self._update_program_instance(plan.id)
             return StartWorkoutDTO(
                 workout_id=plan.id,
                 workout_log_id=active_log.id,
@@ -800,12 +824,24 @@ class StartWorkoutUseCase:
             workout_plan_id=command.workout_id,
             started_at=command.started_at,
         )
+        await self._update_program_instance(plan.id)
         return StartWorkoutDTO(
             workout_id=plan.id,
             workout_log_id=log.id,
             status=plan.status.value,
             started_at=log.started_at,
         )
+
+    async def _update_program_instance(self, workout_plan_id: UUID) -> None:
+        if self.program_repository is None:
+            return
+        instance = await self.program_repository.get_instance_by_workout_plan_id(
+            workout_plan_id
+        )
+        if instance is not None:
+            await self.program_repository.update_instance_status(
+                instance.id, ProgramWorkoutStatus.STARTED
+            )
 
 
 class LogWorkoutSetUseCase:
@@ -1000,9 +1036,11 @@ class CompleteWorkoutUseCase:
         self,
         workout_repository: WorkoutRepository,
         volume_calculator: WorkoutVolumeCalculator,
+        program_repository: ProgramRepository | None = None,
     ) -> None:
         self.workout_repository = workout_repository
         self.volume_calculator = volume_calculator
+        self.program_repository = program_repository
 
     async def execute(self, command: CompleteWorkoutCommand) -> CompleteWorkoutDTO:
         plan = await self.workout_repository.get_plan_by_id(command.workout_id)
@@ -1063,6 +1101,14 @@ class CompleteWorkoutUseCase:
 
         plan.complete()
         await self.workout_repository.update_plan(plan)
+        if self.program_repository is not None:
+            instance = await self.program_repository.get_instance_by_workout_plan_id(
+                plan.id
+            )
+            if instance is not None:
+                await self.program_repository.update_instance_status(
+                    instance.id, ProgramWorkoutStatus.COMPLETED
+                )
 
         return CompleteWorkoutDTO(
             workout_id=plan.id,

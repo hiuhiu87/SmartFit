@@ -15,6 +15,8 @@ class GenerateWorkoutCommand:
     equipment: list[str] = field(default_factory=list)
     avoid_exercises: list[str] = field(default_factory=list)
     user_note: str | None = None
+    goal_override: str | None = None
+    training_style_override: str | None = None
 
 
 @dataclass(slots=True)

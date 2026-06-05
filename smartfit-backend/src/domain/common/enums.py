@@ -22,6 +22,16 @@ class TrainingLevel(StrEnum):
     ADVANCED = "advanced"
 
 
+class TrainingStyle(StrEnum):
+    BALANCED = "balanced"
+    HYPERTROPHY = "hypertrophy"
+    STRENGTH = "strength"
+    CONDITIONING = "conditioning"
+    POSTURE = "posture"
+    GLUTE_CORE = "glute_core"
+    RETURNING = "returning"
+
+
 class EquipmentType(StrEnum):
     DUMBBELL = "dumbbell"
     BARBELL = "barbell"
@@ -34,6 +44,10 @@ class EquipmentType(StrEnum):
     TREADMILL = "treadmill"
     BIKE = "bike"
     BODYWEIGHT = "bodyweight"
+    KETTLEBELL = "kettlebell"
+    LEG_PRESS = "leg_press"
+    ROWING_MACHINE = "rowing_machine"
+    ELLIPTICAL = "elliptical"
     NONE = "none"
 
 

@@ -107,6 +107,7 @@ class SQLModelUserRepository(UserRepository):
         model.height_cm = profile.height_cm
         model.weight_kg = profile.weight_kg
         model.training_level = profile.training_level.value
+        model.training_style = profile.training_style.value
         model.primary_goal = profile.primary_goal.value
         model.injuries = profile.injuries
         model.notes = profile.notes

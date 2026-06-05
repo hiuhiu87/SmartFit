@@ -2,10 +2,21 @@ from collections import Counter
 
 from src.domain.common.enums import EquipmentType, TrainingLevel
 from src.domain.exercise.entities import Exercise
+from src.domain.exercise.equipment_policy import get_equipment_category
+from src.domain.workout.equipment_diversity_policy import EquipmentDiversityPolicy
+from src.domain.workout.training_style_policy import TrainingStylePolicy
 from src.domain.workout.templates import WorkoutSlot
 
 
 class ExerciseSelectionPolicy:
+    def __init__(
+        self,
+        diversity_policy: EquipmentDiversityPolicy | None = None,
+        training_style_policy: TrainingStylePolicy | None = None,
+    ) -> None:
+        self.diversity_policy = diversity_policy or EquipmentDiversityPolicy()
+        self.training_style_policy = training_style_policy or TrainingStylePolicy()
+
     def select_exercise_for_slot(
         self,
         slot: WorkoutSlot,
@@ -15,6 +26,7 @@ class ExerciseSelectionPolicy:
         avoid_exercises: list[str],
         already_selected: list[Exercise],
         template_id: str | None = None,
+        training_style: str = "balanced",
     ) -> Exercise | None:
         selected_ids = {exercise.id for exercise in already_selected}
         normalized_avoid = {
@@ -53,6 +65,8 @@ class ExerciseSelectionPolicy:
                 avoid_exercises=normalized_avoid,
                 group_counts=group_counts,
                 template_id=template_id,
+                already_selected=already_selected,
+                training_style=training_style,
             )
             if score <= -50:
                 continue
@@ -73,6 +87,8 @@ class ExerciseSelectionPolicy:
         avoid_exercises: set[str],
         group_counts: Counter[str],
         template_id: str | None,
+        already_selected: list[Exercise],
+        training_style: str,
     ) -> int:
         score = 0
         movement_pattern = self._movement_pattern(exercise)
@@ -80,6 +96,7 @@ class ExerciseSelectionPolicy:
         role = self._exercise_role(exercise)
         equipment = exercise.equipment_type.value
         substitution_group = self._substitution_group(exercise)
+        category = get_equipment_category(equipment)
 
         if movement_pattern in slot.movement_patterns:
             score += 40
@@ -88,9 +105,26 @@ class ExerciseSelectionPolicy:
         if equipment in available_equipment:
             score += 20
         if role in slot.exercise_roles:
-            score += 10
+            score += 20
         if self._difficulty_allowed(exercise.training_level.value, training_level):
             score += 10
+        if category in slot.preferred_equipment_categories:
+            score += 20
+        score += self.training_style_policy.score_exercise(exercise, training_style)
+        score += self.diversity_policy.diversity_bonus(
+            exercise,
+            already_selected,
+            self._target_categories(slot),
+        )
+        available_categories = {
+            get_equipment_category(item) for item in available_equipment
+        }
+        if len(
+            available_categories
+        ) >= 3 and self.diversity_policy.would_overuse_equipment(
+            exercise, already_selected, 0.6
+        ):
+            score -= 25
         if (
             training_level == TrainingLevel.BEGINNER.value
             and self._joint_stress(exercise) == "low"
@@ -120,6 +154,20 @@ class ExerciseSelectionPolicy:
         ):
             score -= 100
         return score
+
+    def _target_categories(self, slot: WorkoutSlot) -> dict[str, int]:
+        targets = {
+            "free_weight": 2,
+            "machine": 1,
+            "cable": 1,
+            "bodyweight": 1,
+            "cardio": 0,
+        }
+        if "cardio" in slot.movement_patterns:
+            targets["cardio"] = 1
+        for category in slot.preferred_equipment_categories:
+            targets[category] = max(1, targets.get(category, 0))
+        return targets
 
     def _normalize_equipment(self, equipment: list[str]) -> set[str]:
         normalized = {item.strip().lower() for item in equipment if item.strip()}

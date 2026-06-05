@@ -7,6 +7,7 @@ from src.domain.common.enums import (
     ReadinessCategory,
     ReadinessRecommendation,
     TrainingLevel,
+    TrainingStyle,
     WorkoutSource,
     WorkoutStatus,
 )
@@ -76,6 +77,7 @@ def user_profile_model_to_domain(model: UserProfileModel) -> UserProfile:
         height_cm=model.height_cm,
         weight_kg=model.weight_kg,
         training_level=TrainingLevel(model.training_level),
+        training_style=TrainingStyle(model.training_style),
         primary_goal=Goal(model.primary_goal),
         injuries=list(model.injuries),
         notes=model.notes,
@@ -93,6 +95,7 @@ def user_profile_domain_to_model(entity: UserProfile) -> UserProfileModel:
         height_cm=entity.height_cm,
         weight_kg=entity.weight_kg,
         training_level=entity.training_level.value,
+        training_style=entity.training_style.value,
         primary_goal=entity.primary_goal.value,
         injuries=entity.injuries,
         notes=entity.notes,

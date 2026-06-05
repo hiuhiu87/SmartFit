@@ -1,6 +1,12 @@
 from dataclasses import dataclass, field
 
-from src.domain.common.enums import EquipmentType, Goal, TrainingLevel, WorkoutStyle
+from src.domain.common.enums import (
+    EquipmentType,
+    Goal,
+    TrainingLevel,
+    TrainingStyle,
+    WorkoutStyle,
+)
 
 
 @dataclass(slots=True)
@@ -10,6 +16,7 @@ class UpdateProfileCommand:
     height_cm: float | None = None
     weight_kg: float | None = None
     training_level: TrainingLevel = TrainingLevel.BEGINNER
+    training_style: TrainingStyle = TrainingStyle.BALANCED
     primary_goal: Goal = Goal.GENERAL_HEALTH
     injuries: list[str] = field(default_factory=list)
     notes: str | None = None

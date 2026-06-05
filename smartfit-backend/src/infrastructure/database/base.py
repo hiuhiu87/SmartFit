@@ -15,6 +15,7 @@ def import_models() -> None:
         ai_model,
         exercise_model,
         health_model,
+        program_model,
         readiness_model,
         subscription_model,
         user_model,
