@@ -9,6 +9,7 @@ struct AppEnvironment {
     let healthRepository: HealthRepository
     let readinessRepository: ReadinessRepository
     let workoutRepository: WorkoutRepository
+    let programRepository: ProgramRepository
     let aiChatRepository: AIChatRepository
     let historyRepository: HistoryRepository
     let progressRepository: ProgressRepository
@@ -36,6 +37,7 @@ struct AppEnvironment {
         let healthRepository = HealthRepository(apiClient: apiClient)
         let readinessRepository = ReadinessRepository(apiClient: apiClient)
         let workoutRepository = WorkoutRepository(apiClient: apiClient)
+        let programRepository = ProgramRepository(apiClient: apiClient)
         let aiChatRepository = AIChatRepository(apiClient: apiClient)
         let historyRepository = HistoryRepository(apiClient: apiClient)
         let progressRepository = ProgressRepository(apiClient: apiClient)
@@ -51,6 +53,7 @@ struct AppEnvironment {
             healthRepository: healthRepository,
             readinessRepository: readinessRepository,
             workoutRepository: workoutRepository,
+            programRepository: programRepository,
             aiChatRepository: aiChatRepository,
             historyRepository: historyRepository,
             progressRepository: progressRepository,

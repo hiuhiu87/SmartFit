@@ -48,6 +48,8 @@ struct OnboardingView: View {
             GoalSelectionView(viewModel: viewModel)
         case .trainingLevel:
             TrainingLevelView(viewModel: viewModel)
+        case .trainingStyle:
+            TrainingStyleView(viewModel: viewModel)
         case .schedule:
             ScheduleSetupView(viewModel: viewModel)
         case .equipment:

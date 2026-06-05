@@ -11,12 +11,21 @@ final class TodayViewModel: ObservableObject {
     @Published var showManualCheckIn = false
     @Published var lastSyncDate: Date?
     @Published var navigateToWorkoutBuilder = false
+    @Published var activeProgram: TrainingProgramResponse?
+    @Published var todayProgramWorkout: ProgramTodayWorkoutResponse?
+    @Published var generatedProgramWorkout: WorkoutPlanResponse?
+    @Published var isGeneratingProgramWorkout = false
+    @Published var navigateToCreateProgram = false
+    @Published var navigateToProgramDetail = false
 
     private var appState: AppState?
     private var healthRepository: HealthRepository?
     private var readinessRepository: ReadinessRepository?
     private var healthKitManager: HealthKitManager?
     private var healthSummaryBuilder: HealthSummaryBuilder?
+    private var programRepository: ProgramRepository?
+    private var workoutRepository: WorkoutRepository?
+    private var hasLoadedInitialData = false
 
     var workoutDate: String {
         readiness?.date ?? HealthSummaryBuilder().dateString(for: Date())
@@ -29,11 +38,14 @@ final class TodayViewModel: ObservableObject {
         self.readinessRepository = appState.environment.readinessRepository
         self.healthKitManager = appState.environment.healthKitManager
         self.healthSummaryBuilder = appState.environment.healthSummaryBuilder
+        self.programRepository = appState.environment.programRepository
+        self.workoutRepository = appState.environment.workoutRepository
         self.healthPermissionState = appState.environment.healthKitManager.currentPermissionState()
     }
 
     func onAppear() async {
-        guard readiness == nil, !isLoading else { return }
+        guard !hasLoadedInitialData, !isLoading else { return }
+        hasLoadedInitialData = true
         await refresh()
     }
 
@@ -58,6 +70,7 @@ final class TodayViewModel: ObservableObject {
                 self.errorMessage = nil
             }
         }
+        await refreshProgram()
     }
 
     func connectHealthKit() async {
@@ -124,6 +137,65 @@ final class TodayViewModel: ObservableObject {
             self.lastSyncDate = Date()
         } catch {
             self.errorMessage = (error as? LocalizedError)?.errorDescription ?? "Unable to calculate readiness."
+        }
+    }
+
+    func programCreated(_ program: TrainingProgramResponse) {
+        activeProgram = program
+        Task { await refreshProgram() }
+    }
+
+    func refreshProgram() async {
+        guard let programRepository else { return }
+
+        do {
+            let program = try await programRepository.getActiveProgram()
+            activeProgram = program
+            guard program != nil else {
+                todayProgramWorkout = nil
+                return
+            }
+            todayProgramWorkout = try await programRepository.getTodayWorkout(
+                date: workoutDate
+            )
+            activeProgram = try await programRepository.getActiveProgram()
+        } catch {
+            activeProgram = nil
+            todayProgramWorkout = nil
+            if errorMessage == nil {
+                errorMessage = (error as? LocalizedError)?.errorDescription
+                    ?? "Unable to load training program."
+            }
+        }
+    }
+
+    func openOrGenerateProgramWorkout() async {
+        guard
+            let programRepository,
+            let workoutRepository,
+            let todayProgramWorkout,
+            todayProgramWorkout.scheduled
+        else { return }
+
+        isGeneratingProgramWorkout = true
+        errorMessage = nil
+        defer { isGeneratingProgramWorkout = false }
+
+        do {
+            if let workoutID = todayProgramWorkout.workoutPlanID {
+                generatedProgramWorkout = try await workoutRepository.getWorkoutDetail(
+                    workoutId: workoutID
+                )
+            } else {
+                let generated = try await programRepository.generateTodayWorkout(
+                    date: workoutDate
+                )
+                await refreshProgram()
+                generatedProgramWorkout = generated
+            }
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? "Unable to prepare today’s program workout."
         }
     }
 

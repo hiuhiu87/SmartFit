@@ -9,6 +9,7 @@ struct UserProfile: Codable {
     let primaryGoal: String?
     let injuries: [String]
     let notes: String?
+    let trainingStyle: String?
 
     enum CodingKeys: String, CodingKey {
         case fullName = "full_name"
@@ -19,6 +20,7 @@ struct UserProfile: Codable {
         case primaryGoal = "primary_goal"
         case injuries
         case notes
+        case trainingStyle = "training_style"
     }
 }
 
@@ -60,6 +62,7 @@ struct ProfileUpdateRequest: Codable {
     let primaryGoal: String
     let injuries: [String]
     let notes: String?
+    let trainingStyle: String?
 
     enum CodingKeys: String, CodingKey {
         case fullName = "full_name"
@@ -70,6 +73,7 @@ struct ProfileUpdateRequest: Codable {
         case primaryGoal = "primary_goal"
         case injuries
         case notes
+        case trainingStyle = "training_style"
     }
 }
 

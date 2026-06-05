@@ -6,6 +6,7 @@ final class OnboardingViewModel: ObservableObject {
     enum Step: Int, CaseIterable {
         case goal
         case trainingLevel
+        case trainingStyle
         case schedule
         case equipment
         case safety
@@ -14,6 +15,7 @@ final class OnboardingViewModel: ObservableObject {
             switch self {
             case .goal: "Your Goal"
             case .trainingLevel: "Training Level"
+            case .trainingStyle: "Training Style"
             case .schedule: "Weekly Schedule"
             case .equipment: "Available Equipment"
             case .safety: "Safety First"
@@ -24,6 +26,7 @@ final class OnboardingViewModel: ObservableObject {
     @Published var currentStep: Step = .goal
     @Published var selectedGoal = "general_health"
     @Published var selectedTrainingLevel = "beginner"
+    @Published var selectedTrainingStyle = "balanced"
     @Published var trainingDaysPerWeek = 3
     @Published var selectedEquipment: Set<String> = ["bodyweight"]
     @Published var acceptedSafetyDisclaimer = false
@@ -44,6 +47,16 @@ final class OnboardingViewModel: ObservableObject {
         .init(id: "beginner", title: "Beginner", subtitle: "New to structured training or restarting."),
         .init(id: "intermediate", title: "Intermediate", subtitle: "Comfortable with consistent gym sessions."),
         .init(id: "advanced", title: "Advanced", subtitle: "Experienced lifter with strong exercise literacy."),
+    ]
+
+    let trainingStyleOptions: [OnboardingOption] = [
+        .init(id: "balanced", title: "Balanced Fitness", subtitle: "Strength, muscle, cardio, and core"),
+        .init(id: "hypertrophy", title: "Muscle Growth", subtitle: "More volume and muscle-focused training"),
+        .init(id: "strength", title: "Strength Focus", subtitle: "Heavier compound lifts, longer rest"),
+        .init(id: "conditioning", title: "Conditioning", subtitle: "More cardio and full-body work"),
+        .init(id: "posture", title: "Posture & Back", subtitle: "More back, rear delts, and core stability"),
+        .init(id: "glute_core", title: "Glutes & Core", subtitle: "Lower body and core emphasis"),
+        .init(id: "returning", title: "Returning Beginner", subtitle: "Moderate volume and safer exercise choices"),
     ]
 
     let equipmentOptions: [OnboardingOption] = [
@@ -110,7 +123,8 @@ final class OnboardingViewModel: ObservableObject {
             trainingLevel: selectedTrainingLevel,
             primaryGoal: selectedGoal,
             injuries: appState?.currentUser?.profile?.injuries ?? [],
-            notes: "preferred_workout_days_per_week=\(trainingDaysPerWeek)"
+            notes: "preferred_workout_days_per_week=\(trainingDaysPerWeek)",
+            trainingStyle: selectedTrainingStyle
         )
 
         do {
@@ -133,6 +147,8 @@ final class OnboardingViewModel: ObservableObject {
         case .goal:
             return true
         case .trainingLevel:
+            return true
+        case .trainingStyle:
             return true
         case .schedule:
             if !(1...7).contains(trainingDaysPerWeek) {
@@ -159,6 +175,7 @@ final class OnboardingViewModel: ObservableObject {
         guard let user else { return }
         selectedGoal = user.profile?.primaryGoal ?? selectedGoal
         selectedTrainingLevel = user.profile?.trainingLevel ?? selectedTrainingLevel
+        selectedTrainingStyle = user.profile?.trainingStyle ?? selectedTrainingStyle
         if let notes = user.profile?.notes,
            let days = notes.components(separatedBy: "=").last,
            let value = Int(days.trimmingCharacters(in: .whitespacesAndNewlines)),

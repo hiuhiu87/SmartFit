@@ -5,6 +5,7 @@ struct DailyReadinessCard: View {
     let lastSyncDate: Date?
     let onGenerateWorkout: () -> Void
     let onRefresh: () -> Void
+    var showsGenerateWorkout = true
 
     var body: some View {
         AppCard(cornerRadius: 24, padding: 24) {
@@ -46,11 +47,13 @@ struct DailyReadinessCard: View {
                 }
 
                 VStack(spacing: 12) {
-                    PrimaryButton(
-                        title: primaryTitle,
-                        systemImage: "figure.strengthtraining.traditional",
-                        action: onGenerateWorkout
-                    )
+                    if showsGenerateWorkout {
+                        PrimaryButton(
+                            title: primaryTitle,
+                            systemImage: "figure.strengthtraining.traditional",
+                            action: onGenerateWorkout
+                        )
+                    }
                     SecondaryButton(title: "Refresh Health Data", systemImage: "arrow.clockwise", action: onRefresh)
                 }
             }

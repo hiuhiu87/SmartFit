@@ -4,6 +4,7 @@ struct WorkoutPreviewView: View {
     @StateObject private var viewModel: WorkoutPreviewViewModel
     private let workoutRepository: WorkoutRepository
     private let workoutMetricsReader: HealthKitWorkoutMetricsReader?
+    private let allowsRegeneration: Bool
 
     private let workoutDate: String
     private let readiness: ReadinessResponse?
@@ -27,10 +28,12 @@ struct WorkoutPreviewView: View {
         initialGenerationMode: String,
         initialAvoidExercisesText: String,
         initialUserNote: String,
+        allowsRegeneration: Bool = true,
         workoutMetricsReader: HealthKitWorkoutMetricsReader? = nil
     ) {
         self.workoutRepository = workoutRepository
         self.workoutMetricsReader = workoutMetricsReader
+        self.allowsRegeneration = allowsRegeneration
         _viewModel = StateObject(
             wrappedValue: WorkoutPreviewViewModel(
                 workout: workout,
@@ -77,7 +80,7 @@ struct WorkoutPreviewView: View {
                     .frame(height: 220)
                 }
 
-                VStack(spacing: 12) {
+                if allowsRegeneration {
                     NavigationLink {
                         GenerateWorkoutView(
                             workoutDate: workoutDate,
