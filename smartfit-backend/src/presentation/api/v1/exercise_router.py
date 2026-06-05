@@ -6,12 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.container import container
 from src.application.exercise.queries import GetExerciseByIdQuery, ListExercisesQuery
+from src.application.workout.commands import SuggestExerciseReplacementCommand
 from src.infrastructure.database.session import get_session
+from src.infrastructure.security.current_user import get_current_user_id
 from src.presentation.schemas.common_schema import APIResponseSchema
 from src.presentation.schemas.exercise_schema import (
     ExerciseListDataSchema,
     ExerciseResponseSchema,
     ReplaceExerciseRequestSchema,
+    ReplacementCurrentExerciseSchema,
+    ReplacementOptionSchema,
+    ReplaceExerciseResponseSchema,
 )
 
 router = APIRouter(prefix="/exercises", tags=["exercises"])
@@ -62,11 +67,49 @@ async def get_exercise_by_id(
     )
 
 
-@router.post("/replace", response_model=APIResponseSchema[dict])
+@router.post(
+    "/replace",
+    response_model=APIResponseSchema[ReplaceExerciseResponseSchema],
+)
 async def replace_exercise(
     payload: ReplaceExerciseRequestSchema,
-) -> APIResponseSchema[dict]:
-    # TODO: call exercise replacement use case when implemented.
+    user_id: UUID = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+) -> APIResponseSchema[ReplaceExerciseResponseSchema]:
+    result = await container.suggest_exercise_replacement_use_case(session).execute(
+        SuggestExerciseReplacementCommand(
+            user_id=user_id,
+            workout_id=payload.workout_id,
+            workout_plan_exercise_id=payload.workout_plan_exercise_id,
+            reason=payload.reason,
+            available_equipment=payload.available_equipment,
+            user_note=payload.user_note,
+        )
+    )
     return APIResponseSchema(
-        data={"exercise_id": payload.exercise_id, "replacement": None}
+        data=ReplaceExerciseResponseSchema(
+            current_exercise=ReplacementCurrentExerciseSchema(
+                exercise_id=str(result.current_exercise.exercise_id),
+                name=result.current_exercise.name,
+                primary_muscle=result.current_exercise.primary_muscle,
+                equipment=result.current_exercise.equipment,
+            ),
+            replacement_options=[
+                ReplacementOptionSchema(
+                    exercise_id=str(item.exercise_id),
+                    name=item.name,
+                    primary_muscle=item.primary_muscle,
+                    equipment=item.equipment,
+                    difficulty=item.difficulty,
+                    target_sets=item.target_sets,
+                    target_reps=item.target_reps,
+                    rest_seconds=item.rest_seconds,
+                    target_rpe=item.target_rpe,
+                    reason=item.reason,
+                    safety_note=item.safety_note,
+                )
+                for item in result.replacement_options
+            ],
+            safety_note=result.safety_note,
+        )
     )

@@ -119,6 +119,27 @@ class SQLModelWorkoutRepository(WorkoutRepository):
         saved.exercises = plan.exercises
         return saved
 
+    async def update_plan_exercise(
+        self, plan_exercise: WorkoutPlanExercise
+    ) -> WorkoutPlanExercise:
+        statement = select(WorkoutPlanExerciseModel).where(
+            WorkoutPlanExerciseModel.id == plan_exercise.id
+        )
+        result = await self.session.execute(statement)
+        model = result.scalar_one_or_none()
+        if model is None:
+            raise ValueError("Workout plan exercise not found during update.")
+
+        model.exercise_id = plan_exercise.exercise_id
+        model.target_sets = plan_exercise.target_sets
+        model.target_reps = plan_exercise.target_reps
+        model.rest_seconds = plan_exercise.rest_seconds
+        model.target_rpe = plan_exercise.target_rpe
+        model.target_weight = plan_exercise.target_weight
+        model.notes = plan_exercise.notes
+        await self.session.flush()
+        return workout_plan_exercise_model_to_domain(model)
+
     async def create_workout_log(
         self, user_id: UUID, workout_plan_id: UUID, started_at: datetime
     ) -> WorkoutLog:

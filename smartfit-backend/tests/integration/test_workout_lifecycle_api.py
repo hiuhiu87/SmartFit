@@ -9,7 +9,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.main import create_app
-from src.infrastructure.database.base import utcnow
+from src.infrastructure.database.base import import_models, metadata, utcnow
+from src.infrastructure.database.models.ai_model import (
+    AIRequestModel,
+    AIUsageDailyModel,
+)
 from src.infrastructure.database.models.exercise_model import (
     ExerciseAlternativeModel,
     ExerciseModel,
@@ -48,24 +52,8 @@ async def workout_lifecycle_context(tmp_path: Path):
     )
 
     async with engine.begin() as connection:
-        await connection.run_sync(
-            lambda sync_conn: UserModel.metadata.create_all(
-                sync_conn,
-                tables=[
-                    UserModel.__table__,
-                    UserProfileModel.__table__,
-                    UserEquipmentModel.__table__,
-                    ReadinessScoreModel.__table__,
-                    ExerciseModel.__table__,
-                    ExerciseAlternativeModel.__table__,
-                    WorkoutPlanModel.__table__,
-                    WorkoutPlanExerciseModel.__table__,
-                    WorkoutLogModel.__table__,
-                    WorkoutSetLogModel.__table__,
-                    WorkoutFeedbackModel.__table__,
-                ],
-            )
-        )
+        import_models()
+        await connection.run_sync(metadata.create_all)
 
     async with session_factory() as session:
         session.add_all(_seed_rows())
@@ -365,6 +353,111 @@ async def test_cannot_log_set_before_start(workout_lifecycle_context) -> None:
         )
 
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_suggest_exercise_replacement_returns_contract(
+    workout_lifecycle_context,
+) -> None:
+    app = workout_lifecycle_context["app"]
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.replacement.suggest@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
+        generated = await _generate_workout(client, token)
+        exercise = generated["exercises"][0]
+
+        response = await client.post(
+            "/api/v1/exercises/replace",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "workout_id": generated["workout_id"],
+                "workout_plan_exercise_id": exercise["workout_plan_exercise_id"],
+                "reason": "equipment_unavailable",
+                "available_equipment": ["bodyweight", "dumbbell", "bench"],
+                "user_note": "Bench is busy.",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["current_exercise"]["exercise_id"] == exercise["exercise_id"]
+    assert payload["replacement_options"]
+    option = payload["replacement_options"][0]
+    assert option["exercise_id"] != exercise["exercise_id"]
+    assert option["name"]
+    assert option["target_sets"] == exercise["target_sets"]
+    assert option["target_reps"] == exercise["target_reps"]
+    assert option["rest_seconds"] >= 0
+    assert option["reason"]
+
+
+@pytest.mark.asyncio
+async def test_apply_exercise_replacement_updates_workout_detail(
+    workout_lifecycle_context,
+) -> None:
+    app = workout_lifecycle_context["app"]
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "lifecycle.replacement.apply@example.com"
+        )
+        await _seed_profile_and_readiness(
+            workout_lifecycle_context["session_factory"], user_id
+        )
+        generated = await _generate_workout(client, token)
+        exercise = generated["exercises"][0]
+
+        suggestions = await client.post(
+            "/api/v1/exercises/replace",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "workout_id": generated["workout_id"],
+                "workout_plan_exercise_id": exercise["workout_plan_exercise_id"],
+                "reason": "equipment_unavailable",
+                "available_equipment": ["bodyweight", "dumbbell", "bench"],
+            },
+        )
+        option = suggestions.json()["data"]["replacement_options"][0]
+
+        response = await client.post(
+            f"/api/v1/workouts/{generated['workout_id']}/exercises/{exercise['workout_plan_exercise_id']}/replace",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "replacement_exercise_id": option["exercise_id"],
+                "target_sets": option["target_sets"],
+                "target_reps": option["target_reps"],
+                "rest_seconds": option["rest_seconds"],
+                "target_rpe": option["target_rpe"],
+                "reason": "equipment_unavailable",
+            },
+        )
+        detail_response = await client.get(
+            f"/api/v1/workouts/{generated['workout_id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["workout_plan_exercise_id"] == exercise["workout_plan_exercise_id"]
+    assert payload["replaced_exercise_id"] == exercise["exercise_id"]
+    assert payload["replacement_exercise_id"] == option["exercise_id"]
+    assert payload["is_replacement"] is True
+
+    detail = detail_response.json()["data"]
+    updated = next(
+        item
+        for item in detail["exercises"]
+        if item["workout_plan_exercise_id"] == exercise["workout_plan_exercise_id"]
+    )
+    assert updated["exercise_id"] == option["exercise_id"]
+    assert updated["name"] == option["name"]
 
 
 @pytest.mark.asyncio

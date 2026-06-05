@@ -23,7 +23,7 @@ from src.domain.common.enums import (
     TrainingLevel,
 )
 from src.domain.common.exceptions import AIInvalidOutputError, AIProviderTimeoutError
-from src.infrastructure.database.base import utcnow
+from src.infrastructure.database.base import import_models, metadata, utcnow
 from src.infrastructure.database.models.ai_model import (
     AIChatMessageModel,
     AIRequestModel,
@@ -34,6 +34,7 @@ from src.infrastructure.database.models.exercise_model import (
     ExerciseModel,
 )
 from src.infrastructure.database.models.readiness_model import ReadinessScoreModel
+from src.infrastructure.database.models.subscription_model import SubscriptionModel
 from src.infrastructure.database.models.user_model import (
     UserEquipmentModel,
     UserModel,
@@ -90,27 +91,8 @@ async def ai_usage_context(tmp_path: Path):
     )
 
     async with engine.begin() as connection:
-        await connection.run_sync(
-            lambda sync_conn: UserModel.metadata.create_all(
-                sync_conn,
-                tables=[
-                    UserModel.__table__,
-                    UserProfileModel.__table__,
-                    UserEquipmentModel.__table__,
-                    ReadinessScoreModel.__table__,
-                    ExerciseModel.__table__,
-                    ExerciseAlternativeModel.__table__,
-                    WorkoutPlanModel.__table__,
-                    WorkoutPlanExerciseModel.__table__,
-                    WorkoutLogModel.__table__,
-                    WorkoutSetLogModel.__table__,
-                    WorkoutFeedbackModel.__table__,
-                    AIRequestModel.__table__,
-                    AIUsageDailyModel.__table__,
-                    AIChatMessageModel.__table__,
-                ],
-            )
-        )
+        import_models()
+        await connection.run_sync(metadata.create_all)
 
     async with session_factory() as session:
         session.add_all(_seed_rows())
@@ -369,6 +351,41 @@ async def test_ai_usage_today_empty(ai_usage_context) -> None:
 
 
 @pytest.mark.asyncio
+async def test_ai_usage_today_uses_premium_subscription(ai_usage_context) -> None:
+    app = ai_usage_context["app"]
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        user_id, token = await _register_and_login(
+            client, "ai.usage.premium@example.com"
+        )
+        async with ai_usage_context["session_factory"]() as session:
+            session.add(
+                SubscriptionModel(
+                    user_id=UUID(user_id),
+                    plan="premium",
+                    status="active",
+                )
+            )
+            await session.commit()
+        response = await client.get(
+            "/api/v1/ai/usage/today",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["plan"] == "premium"
+    assert payload["limits"] == {
+        "ai_workout_limit": 30,
+        "ai_chat_limit": 200,
+        "ai_replacement_limit": 100,
+        "ai_weekly_report_limit": 30,
+        "total_ai_limit": 300,
+    }
+
+
+@pytest.mark.asyncio
 async def test_ai_workout_generation_increments_usage(ai_usage_context) -> None:
     app = ai_usage_context["app"]
     container.gemini_workout_generator_impl = FakeGeminiWorkoutGenerator(
@@ -567,6 +584,6 @@ async def test_ai_request_log_saved_on_success(ai_usage_context) -> None:
     requests = await _get_ai_requests(ai_usage_context["session_factory"], user_id)
     assert response["status_code"] == 200
     assert len(requests) == 1
-    assert requests[0].provider == "gemini"
+    assert requests[0].provider == "openrouter"
     assert requests[0].model_name
     assert requests[0].status == "success"

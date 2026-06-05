@@ -117,6 +117,7 @@ class AIAllowedExercise:
 @dataclass(slots=True)
 class AIWorkoutGenerationContext:
     user_id: UUID
+    target_date: date_type
     goal: str
     training_level: str
     readiness_score: int

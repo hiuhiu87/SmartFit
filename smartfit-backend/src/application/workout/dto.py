@@ -64,6 +64,52 @@ class SetLogDTO:
 
 
 @dataclass(slots=True)
+class ReplacementCurrentExerciseDTO:
+    exercise_id: UUID
+    name: str
+    primary_muscle: str
+    equipment: str
+
+
+@dataclass(slots=True)
+class ReplacementOptionDTO:
+    exercise_id: UUID
+    name: str
+    primary_muscle: str
+    equipment: str
+    difficulty: str | None
+    target_sets: int
+    target_reps: str
+    rest_seconds: int
+    target_rpe: int | None
+    reason: str
+    safety_note: str | None = None
+
+
+@dataclass(slots=True)
+class SuggestExerciseReplacementDTO:
+    current_exercise: ReplacementCurrentExerciseDTO
+    replacement_options: list[ReplacementOptionDTO] = field(default_factory=list)
+    safety_note: str | None = None
+
+
+@dataclass(slots=True)
+class ApplyExerciseReplacementDTO:
+    workout_id: UUID
+    workout_plan_exercise_id: UUID
+    replaced_exercise_id: UUID
+    replacement_exercise_id: UUID
+    name: str
+    primary_muscle: str
+    equipment: str
+    target_sets: int
+    target_reps: str
+    rest_seconds: int
+    target_rpe: int | None
+    is_replacement: bool = True
+
+
+@dataclass(slots=True)
 class CompleteWorkoutDTO:
     workout_id: UUID
     workout_log_id: UUID

@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.main import create_app
+from src.infrastructure.database.base import import_models, metadata
 from src.infrastructure.database.models.health_model import (
     HealthSummaryModel,
     ManualCheckinModel,
@@ -31,19 +33,8 @@ async def test_app(tmp_path: Path):
     )
 
     async with engine.begin() as connection:
-        await connection.run_sync(
-            lambda sync_conn: UserModel.metadata.create_all(
-                sync_conn,
-                tables=[
-                    UserModel.__table__,
-                    UserProfileModel.__table__,
-                    UserEquipmentModel.__table__,
-                    HealthSummaryModel.__table__,
-                    ManualCheckinModel.__table__,
-                    ReadinessScoreModel.__table__,
-                ],
-            )
-        )
+        import_models()
+        await connection.run_sync(metadata.create_all)
 
     async def override_get_session():
         async with session_factory() as session:
@@ -703,6 +694,7 @@ async def test_calculate_readiness_with_missing_hrv_still_succeeds(test_app) -> 
 
 @pytest.mark.asyncio
 async def test_today_returns_existing_readiness(test_app) -> None:
+    today = date.today().isoformat()
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://testserver"
     ) as client:
@@ -719,7 +711,7 @@ async def test_today_returns_existing_readiness(test_app) -> None:
             "/api/v1/health/manual-checkin",
             headers={"Authorization": f"Bearer {access_token}"},
             json={
-                "date": "2026-05-31",
+                "date": today,
                 "energy": 4,
                 "soreness": 2,
                 "stress": 2,
@@ -730,7 +722,7 @@ async def test_today_returns_existing_readiness(test_app) -> None:
         calculate_response = await client.post(
             "/api/v1/readiness/calculate",
             headers={"Authorization": f"Bearer {access_token}"},
-            json={"date": "2026-05-31"},
+            json={"date": today},
         )
         response = await client.get(
             "/api/v1/readiness/today",

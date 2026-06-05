@@ -25,7 +25,7 @@ class GenerateWorkoutRequestSchema(BaseModel):
         default_factory=list,
         validation_alias=AliasChoices("equipment", "equipment_types"),
     )
-    generation_mode: Literal["auto", "gemini", "rule_based"] = "auto"
+    generation_mode: Literal["auto", "openrouter", "gemini", "rule_based"] = "auto"
     avoid_exercises: list[str] = Field(default_factory=list)
     user_note: str | None = Field(default=None, max_length=2000)
 
@@ -100,6 +100,30 @@ class LogSetResponseSchema(BaseModel):
     workout_log_id: str
     workout_plan_exercise_id: str
     set_number: int
+
+
+class ApplyExerciseReplacementRequestSchema(BaseModel):
+    replacement_exercise_id: UUID
+    target_sets: int = Field(ge=1, le=10)
+    target_reps: str = Field(min_length=1, max_length=50)
+    rest_seconds: int = Field(ge=0, le=600)
+    target_rpe: int | None = Field(default=None, ge=1, le=10)
+    reason: str | None = Field(default=None, max_length=100)
+
+
+class ApplyExerciseReplacementResponseSchema(BaseModel):
+    workout_id: str
+    workout_plan_exercise_id: str
+    replaced_exercise_id: str
+    replacement_exercise_id: str
+    name: str
+    primary_muscle: str
+    equipment: str
+    target_sets: int
+    target_reps: str
+    rest_seconds: int
+    target_rpe: int | None = None
+    is_replacement: bool
 
 
 class CompleteWorkoutRequestSchema(BaseModel):

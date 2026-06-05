@@ -167,7 +167,7 @@ def downgrade() -> None:
         "ai_requests",
         "provider",
         existing_type=sa.VARCHAR(length=50),
-        server_default=sa.text("'gemini'::character varying"),
+        server_default=sa.text("'openrouter'::character varying"),
         existing_nullable=False,
     )
     # ### end Alembic commands ###

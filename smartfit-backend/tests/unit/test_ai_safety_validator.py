@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import uuid4
 
 import pytest
@@ -18,6 +19,7 @@ def test_workout_safety_validator_blocks_zero_rest_for_non_continuous_exercise()
     validator = AIWorkoutSafetyValidator()
     context = AIWorkoutGenerationContext(
         user_id=uuid4(),
+        target_date=date(2026, 6, 1),
         goal="muscle_gain",
         training_level="intermediate",
         readiness_score=60,

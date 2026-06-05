@@ -36,7 +36,8 @@ class SQLModelAIUsageRepository(AIUsageRepository):
     async def increment_usage(
         self, user_id: UUID, target_date: date_type, request_type: str
     ) -> AIUsageDaily:
-        # TODO: add row-level locking if AI traffic becomes high.
+        # SQLite test environments do not support portable row-level locks; production
+        # deployments should pair this unique daily row with database-level contention handling.
         statement = select(AIUsageDailyModel).where(
             AIUsageDailyModel.user_id == user_id,
             AIUsageDailyModel.date == target_date,

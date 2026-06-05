@@ -19,12 +19,15 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
-    AI_PROVIDER: str = Field(default="gemini")
+    AI_PROVIDER: str = Field(default="openrouter")
     OPENAI_API_KEY: str = Field(default="")
-    GEMINI_API_KEY: str = Field(default="")
-    GEMINI_MODEL: str = Field(default="gemini-2.5-flash-lite")
-    GEMINI_TIMEOUT_SECONDS: int = Field(default=20)
-    GEMINI_MAX_OUTPUT_TOKENS: int = Field(default=1200)
+    OPENROUTER_API_KEY: str = Field(default="")
+    OPENROUTER_BASE_URL: str = Field(default="https://openrouter.ai/api/v1")
+    OPENROUTER_MODEL: str = Field(default="google/gemini-2.5-flash-lite")
+    OPENROUTER_TIMEOUT_SECONDS: int = Field(default=20)
+    OPENROUTER_MAX_OUTPUT_TOKENS: int = Field(default=1200)
+    OPENROUTER_HTTP_REFERER: str = Field(default="")
+    OPENROUTER_APP_TITLE: str = Field(default="SmartFit")
     ENVIRONMENT: str = Field(default="local")
 
     @field_validator("DATABASE_URL", mode="before")
@@ -36,9 +39,7 @@ class Settings(BaseSettings):
         if value.startswith("postgres://"):
             return value.replace("postgres://", "postgresql+asyncpg://", 1)
 
-        if value.startswith("postgresql://") and not value.startswith(
-            "postgresql+"
-        ):
+        if value.startswith("postgresql://") and not value.startswith("postgresql+"):
             return value.replace("postgresql://", "postgresql+asyncpg://", 1)
 
         return value

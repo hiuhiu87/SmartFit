@@ -92,7 +92,7 @@ class SQLModelAIRequestRepository(AIRequestRepository):
                 user_id=user_id,
                 workout_plan_id=workout_plan_id,
                 request_type=AIRequestType.CHAT,
-                provider="gemini",
+                provider="openrouter",
                 model_name="",
                 generation_mode=None,
                 status=AIRequestStatus.SUCCESS,

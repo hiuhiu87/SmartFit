@@ -52,7 +52,7 @@ class AIWorkoutOutputMapper:
         return WorkoutPlan(
             id=plan_id,
             user_id=context.user_id,
-            target_date=self._today_placeholder(),
+            target_date=context.target_date,
             title=result.workout_title,
             goal=Goal(context.goal),
             focus=focus_enum,
@@ -65,8 +65,3 @@ class AIWorkoutOutputMapper:
             safety_note=result.safety_note or self.DEFAULT_SAFETY_NOTE,
             exercises=exercises,
         )
-
-    def _today_placeholder(self):
-        from datetime import date
-
-        return date.today()

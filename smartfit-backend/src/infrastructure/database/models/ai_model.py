@@ -20,7 +20,7 @@ class AIRequestModel(SQLModel, table=True):
         default=None, foreign_key="workout_plans.id", index=True
     )
     request_type: str = Field(index=True, max_length=50)
-    provider: str = Field(default="gemini", max_length=50)
+    provider: str = Field(default="openrouter", max_length=50)
     model_name: str = Field(default="", max_length=100)
     generation_mode: str | None = Field(default=None, max_length=50)
     status: str = Field(index=True, max_length=50)

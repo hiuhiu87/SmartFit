@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.container import container
 from src.application.workout.commands import (
+    ApplyExerciseReplacementCommand,
     CompleteWorkoutCommand,
     GenerateWorkoutCommand,
     LogWorkoutSetCommand,
@@ -20,6 +21,8 @@ from src.infrastructure.database.session import get_session
 from src.infrastructure.security.current_user import get_current_user_id
 from src.presentation.schemas.common_schema import APIResponseSchema
 from src.presentation.schemas.workout_schema import (
+    ApplyExerciseReplacementRequestSchema,
+    ApplyExerciseReplacementResponseSchema,
     CompleteWorkoutRequestSchema,
     CompleteWorkoutResponseSchema,
     GenerateWorkoutRequestSchema,
@@ -221,6 +224,49 @@ async def log_set(
             workout_log_id=str(result.workout_log_id),
             workout_plan_exercise_id=str(result.workout_plan_exercise_id),
             set_number=result.set_number,
+        )
+    )
+
+
+@router.post(
+    "/{workout_id}/exercises/{workout_plan_exercise_id}/replace",
+    response_model=APIResponseSchema[ApplyExerciseReplacementResponseSchema],
+)
+async def apply_exercise_replacement(
+    workout_id: UUID,
+    workout_plan_exercise_id: UUID,
+    payload: ApplyExerciseReplacementRequestSchema,
+    user_id: UUID = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+) -> APIResponseSchema[ApplyExerciseReplacementResponseSchema]:
+    result = await container.apply_exercise_replacement_use_case(session).execute(
+        ApplyExerciseReplacementCommand(
+            user_id=user_id,
+            workout_id=workout_id,
+            workout_plan_exercise_id=workout_plan_exercise_id,
+            replacement_exercise_id=payload.replacement_exercise_id,
+            target_sets=payload.target_sets,
+            target_reps=payload.target_reps,
+            rest_seconds=payload.rest_seconds,
+            target_rpe=payload.target_rpe,
+            reason=payload.reason,
+        )
+    )
+    await session.commit()
+    return APIResponseSchema(
+        data=ApplyExerciseReplacementResponseSchema(
+            workout_id=str(result.workout_id),
+            workout_plan_exercise_id=str(result.workout_plan_exercise_id),
+            replaced_exercise_id=str(result.replaced_exercise_id),
+            replacement_exercise_id=str(result.replacement_exercise_id),
+            name=result.name,
+            primary_muscle=result.primary_muscle,
+            equipment=result.equipment,
+            target_sets=result.target_sets,
+            target_reps=result.target_reps,
+            rest_seconds=result.rest_seconds,
+            target_rpe=result.target_rpe,
+            is_replacement=result.is_replacement,
         )
     )
 

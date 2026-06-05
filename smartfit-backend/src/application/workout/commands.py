@@ -38,6 +38,29 @@ class LogWorkoutSetCommand:
 
 
 @dataclass(slots=True)
+class SuggestExerciseReplacementCommand:
+    user_id: UUID
+    workout_id: UUID
+    workout_plan_exercise_id: UUID
+    reason: str
+    available_equipment: list[str] = field(default_factory=list)
+    user_note: str | None = None
+
+
+@dataclass(slots=True)
+class ApplyExerciseReplacementCommand:
+    user_id: UUID
+    workout_id: UUID
+    workout_plan_exercise_id: UUID
+    replacement_exercise_id: UUID
+    target_sets: int
+    target_reps: str
+    rest_seconds: int
+    target_rpe: int | None = None
+    reason: str | None = None
+
+
+@dataclass(slots=True)
 class CompleteWorkoutCommand:
     user_id: UUID
     workout_id: UUID

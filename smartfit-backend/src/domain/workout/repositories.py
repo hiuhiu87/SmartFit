@@ -30,6 +30,12 @@ class WorkoutRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def update_plan_exercise(
+        self, plan_exercise: WorkoutPlanExercise
+    ) -> WorkoutPlanExercise:
+        raise NotImplementedError
+
+    @abstractmethod
     async def create_workout_log(
         self, user_id: UUID, workout_plan_id: UUID, started_at: datetime
     ) -> WorkoutLog:

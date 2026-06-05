@@ -18,7 +18,7 @@ from src.domain.common.enums import (
     TrainingLevel,
 )
 from src.domain.common.exceptions import AIProviderTimeoutError
-from src.infrastructure.database.base import utcnow
+from src.infrastructure.database.base import import_models, metadata, utcnow
 from src.infrastructure.database.models.ai_model import (
     AIChatMessageModel,
     AIRequestModel,
@@ -70,27 +70,8 @@ async def ai_chat_context(tmp_path: Path):
     )
 
     async with engine.begin() as connection:
-        await connection.run_sync(
-            lambda sync_conn: UserModel.metadata.create_all(
-                sync_conn,
-                tables=[
-                    UserModel.__table__,
-                    UserProfileModel.__table__,
-                    UserEquipmentModel.__table__,
-                    ReadinessScoreModel.__table__,
-                    ExerciseModel.__table__,
-                    ExerciseAlternativeModel.__table__,
-                    WorkoutPlanModel.__table__,
-                    WorkoutPlanExerciseModel.__table__,
-                    WorkoutLogModel.__table__,
-                    WorkoutSetLogModel.__table__,
-                    WorkoutFeedbackModel.__table__,
-                    AIUsageDailyModel.__table__,
-                    AIRequestModel.__table__,
-                    AIChatMessageModel.__table__,
-                ],
-            )
-        )
+        import_models()
+        await connection.run_sync(metadata.create_all)
 
     async with session_factory() as session:
         session.add_all(_seed_rows())
@@ -207,28 +188,31 @@ async def _get_exercise_id_by_slug(
         return str(model.id)
 
 
+async def _get_first_replacement_option(
+    client: AsyncClient,
+    token: str,
+    workout: dict,
+    workout_plan_exercise_id: str,
+) -> dict:
+    response = await client.post(
+        "/api/v1/exercises/replace",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "workout_id": workout["workout_id"],
+            "workout_plan_exercise_id": workout_plan_exercise_id,
+            "reason": "equipment_unavailable",
+            "available_equipment": ["dumbbell", "bench", "bodyweight"],
+        },
+    )
+    assert response.status_code == 200
+    options = response.json()["data"]["replacement_options"]
+    assert options
+    return options[0]
+
+
 @pytest.mark.asyncio
 async def test_ai_chat_replace_exercise_success(ai_chat_context) -> None:
     app = ai_chat_context["app"]
-    replacement_id = await _get_exercise_id_by_slug(
-        ai_chat_context["session_factory"], "push-up"
-    )
-    container.gemini_ai_chat_generator_impl = FakeChatGenerator(
-        result=AIChatResult(
-            reply="You can switch to Push-Up for 3 sets of 10-12 reps with 75 seconds rest.",
-            intent="replace_exercise",
-            suggested_action=AIChatSuggestedAction(
-                type="replace_exercise",
-                exercise_id=UUID(replacement_id),
-                exercise_name="Push-Up",
-                target_sets=3,
-                target_reps="10-12",
-                rest_seconds=75,
-                target_rpe=7,
-                reason="Similar chest focus with bodyweight equipment.",
-            ),
-        )
-    )
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
@@ -238,6 +222,25 @@ async def test_ai_chat_replace_exercise_success(ai_chat_context) -> None:
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
         current_exercise_id = workout["exercises"][0]["workout_plan_exercise_id"]
+        replacement = await _get_first_replacement_option(
+            client, token, workout, current_exercise_id
+        )
+        container.gemini_ai_chat_generator_impl = FakeChatGenerator(
+            result=AIChatResult(
+                reply=f"You can switch to {replacement['name']} for 3 sets of 10-12 reps with 75 seconds rest.",
+                intent="replace_exercise",
+                suggested_action=AIChatSuggestedAction(
+                    type="replace_exercise",
+                    exercise_id=UUID(replacement["exercise_id"]),
+                    exercise_name=replacement["name"],
+                    target_sets=3,
+                    target_reps="10-12",
+                    rest_seconds=75,
+                    target_rpe=7,
+                    reason="Similar target muscle with available equipment.",
+                ),
+            )
+        )
         response = await client.post(
             "/api/v1/ai/chat",
             headers={"Authorization": f"Bearer {token}"},
@@ -253,7 +256,7 @@ async def test_ai_chat_replace_exercise_success(ai_chat_context) -> None:
     assert payload["reply"]
     assert payload["intent"] == "replace_exercise"
     assert payload["suggested_action"]["type"] == "replace_exercise"
-    assert payload["suggested_action"]["exercise_id"] == replacement_id
+    assert payload["suggested_action"]["exercise_id"] == replacement["exercise_id"]
 
 
 @pytest.mark.asyncio
@@ -529,25 +532,6 @@ async def test_ai_chat_gemini_failure_returns_safe_fallback(ai_chat_context) -> 
 @pytest.mark.asyncio
 async def test_ai_chat_history_returns_saved_messages(ai_chat_context) -> None:
     app = ai_chat_context["app"]
-    replacement_id = await _get_exercise_id_by_slug(
-        ai_chat_context["session_factory"], "push-up"
-    )
-    container.gemini_ai_chat_generator_impl = FakeChatGenerator(
-        result=AIChatResult(
-            reply="Use Push-Up instead.",
-            intent="replace_exercise",
-            suggested_action=AIChatSuggestedAction(
-                type="replace_exercise",
-                exercise_id=UUID(replacement_id),
-                exercise_name="Push-Up",
-                target_sets=3,
-                target_reps="10-12",
-                rest_seconds=75,
-                target_rpe=7,
-                reason="Chest focus with bodyweight.",
-            ),
-        )
-    )
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
@@ -556,14 +540,32 @@ async def test_ai_chat_history_returns_saved_messages(ai_chat_context) -> None:
         )
         await _seed_profile_and_readiness(ai_chat_context["session_factory"], user_id)
         workout = await _generate_and_start_workout(client, token)
+        current_exercise_id = workout["exercises"][0]["workout_plan_exercise_id"]
+        replacement = await _get_first_replacement_option(
+            client, token, workout, current_exercise_id
+        )
+        container.gemini_ai_chat_generator_impl = FakeChatGenerator(
+            result=AIChatResult(
+                reply=f"Use {replacement['name']} instead.",
+                intent="replace_exercise",
+                suggested_action=AIChatSuggestedAction(
+                    type="replace_exercise",
+                    exercise_id=UUID(replacement["exercise_id"]),
+                    exercise_name=replacement["name"],
+                    target_sets=3,
+                    target_reps="10-12",
+                    rest_seconds=75,
+                    target_rpe=7,
+                    reason="Matches the current exercise with available equipment.",
+                ),
+            )
+        )
         await client.post(
             "/api/v1/ai/chat",
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "workout_id": workout["workout_id"],
-                "current_workout_plan_exercise_id": workout["exercises"][0][
-                    "workout_plan_exercise_id"
-                ],
+                "current_workout_plan_exercise_id": current_exercise_id,
                 "message": "Need a replacement.",
             },
         )

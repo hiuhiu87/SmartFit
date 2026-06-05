@@ -1,7 +1,16 @@
+from datetime import date
 from uuid import NAMESPACE_DNS, uuid4, uuid5
 
-from src.domain.common.enums import EquipmentType, Goal, MuscleGroup, TrainingLevel
+from src.domain.common.enums import (
+    EquipmentType,
+    Goal,
+    MuscleGroup,
+    TrainingLevel,
+    WorkoutSource,
+    WorkoutStatus,
+)
 from src.domain.exercise.entities import Exercise
+from src.domain.workout.entities import WorkoutPlan
 from src.domain.workout.exercise_selection_policy import ExerciseSelectionPolicy
 from src.domain.workout.services import RuleBasedWorkoutGenerator
 from src.domain.workout.template_resolver import WorkoutTemplateResolver
@@ -203,14 +212,40 @@ def legacy_exercise(
 
 def legacy_candidate_exercises() -> list[Exercise]:
     return [
-        legacy_exercise("Dumbbell Bench Press", MuscleGroup.CHEST, EquipmentType.DUMBBELL, "push"),
+        legacy_exercise(
+            "Dumbbell Bench Press", MuscleGroup.CHEST, EquipmentType.DUMBBELL, "push"
+        ),
         legacy_exercise("Push-Up", MuscleGroup.CHEST, EquipmentType.BODYWEIGHT, "push"),
-        legacy_exercise("Dumbbell Shoulder Press", MuscleGroup.SHOULDERS, EquipmentType.DUMBBELL, "push"),
-        legacy_exercise("Dumbbell Lateral Raise", MuscleGroup.SHOULDERS, EquipmentType.DUMBBELL, "push"),
-        legacy_exercise("Dumbbell Triceps Extension", MuscleGroup.ARMS, EquipmentType.DUMBBELL, "push"),
-        legacy_exercise("Dumbbell One-Arm Row", MuscleGroup.BACK, EquipmentType.DUMBBELL, "pull"),
-        legacy_exercise("Chest Supported Dumbbell Row", MuscleGroup.BACK, EquipmentType.DUMBBELL, "pull"),
-        legacy_exercise("Dumbbell Biceps Curl", MuscleGroup.ARMS, EquipmentType.DUMBBELL, "pull"),
+        legacy_exercise(
+            "Dumbbell Shoulder Press",
+            MuscleGroup.SHOULDERS,
+            EquipmentType.DUMBBELL,
+            "push",
+        ),
+        legacy_exercise(
+            "Dumbbell Lateral Raise",
+            MuscleGroup.SHOULDERS,
+            EquipmentType.DUMBBELL,
+            "push",
+        ),
+        legacy_exercise(
+            "Dumbbell Triceps Extension",
+            MuscleGroup.ARMS,
+            EquipmentType.DUMBBELL,
+            "push",
+        ),
+        legacy_exercise(
+            "Dumbbell One-Arm Row", MuscleGroup.BACK, EquipmentType.DUMBBELL, "pull"
+        ),
+        legacy_exercise(
+            "Chest Supported Dumbbell Row",
+            MuscleGroup.BACK,
+            EquipmentType.DUMBBELL,
+            "pull",
+        ),
+        legacy_exercise(
+            "Dumbbell Biceps Curl", MuscleGroup.ARMS, EquipmentType.DUMBBELL, "pull"
+        ),
         legacy_exercise("Plank", MuscleGroup.CORE, EquipmentType.BODYWEIGHT, "core"),
     ]
 
@@ -285,6 +320,55 @@ def test_template_resolver_maps_upper_pull_and_low_readiness() -> None:
         resolver.resolve("upper_body_pull", "muscle_gain", "intermediate", 35).id
         == "recovery_session"
     )
+
+
+def test_template_resolver_rotates_auto_upper_body_after_recent_push() -> None:
+    resolver = WorkoutTemplateResolver()
+    recent_push = WorkoutPlan(
+        id=uuid4(),
+        user_id=uuid4(),
+        target_date=date(2026, 6, 1),
+        title="Recent Push",
+        goal=Goal.MUSCLE_GAIN,
+        focus=MuscleGroup.CHEST,
+        status=WorkoutStatus.COMPLETED,
+        source=WorkoutSource.FALLBACK,
+    )
+
+    template = resolver.resolve(
+        "upper_body",
+        "muscle_gain",
+        "intermediate",
+        72,
+        recent_workouts=[recent_push],
+    )
+
+    assert template.id == "upper_pull_emphasis"
+
+
+def test_template_resolver_respects_explicit_focus_when_recent_matches() -> None:
+    resolver = WorkoutTemplateResolver()
+    recent_push = WorkoutPlan(
+        id=uuid4(),
+        user_id=uuid4(),
+        target_date=date(2026, 6, 1),
+        title="Recent Push",
+        goal=Goal.MUSCLE_GAIN,
+        focus=MuscleGroup.CHEST,
+        status=WorkoutStatus.COMPLETED,
+        source=WorkoutSource.FALLBACK,
+    )
+
+    template = resolver.resolve(
+        "chest",
+        "muscle_gain",
+        "intermediate",
+        72,
+        recent_workouts=[recent_push],
+        avoid_recent_repetition=False,
+    )
+
+    assert template.id == "upper_push_emphasis"
 
 
 def test_policy_respects_equipment_avoid_and_beginner_advanced_block() -> None:

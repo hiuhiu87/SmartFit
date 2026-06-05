@@ -478,7 +478,7 @@ class AIChatUseCase:
             workout_plan_id=command.workout_id,
             request_type="chat",
             provider=settings.AI_PROVIDER,
-            model_name=settings.GEMINI_MODEL,
+            model_name=settings.OPENROUTER_MODEL,
             generation_mode=None,
             input_payload=input_payload,
             output_payload=output_payload or {},

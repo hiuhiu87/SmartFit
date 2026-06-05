@@ -787,7 +787,7 @@
           }
         },
         {
-          "name": "Generate Workout (Gemini)",
+          "name": "Generate Workout (OpenRouter)",
           "event": [
             {
               "listen": "test",
@@ -817,7 +817,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"date\": \"{{targetDate}}\",\n  \"workout_split\": \"upper_body\",\n  \"focus_muscle\": \"upper_body\",\n  \"available_time_minutes\": 45,\n  \"equipment\": [\"dumbbell\", \"bench\", \"bodyweight\"],\n  \"avoid_exercises\": [],\n  \"generation_mode\": \"gemini\",\n  \"user_note\": \"Keep it moderate intensity.\"\n}"
+              "raw": "{\n  \"date\": \"{{targetDate}}\",\n  \"workout_split\": \"upper_body\",\n  \"focus_muscle\": \"upper_body\",\n  \"available_time_minutes\": 45,\n  \"equipment\": [\"dumbbell\", \"bench\", \"bodyweight\"],\n  \"avoid_exercises\": [],\n  \"generation_mode\": \"openrouter\",\n  \"user_note\": \"Keep it moderate intensity.\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/workouts/generate",

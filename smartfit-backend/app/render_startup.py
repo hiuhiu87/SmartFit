@@ -55,9 +55,7 @@ async def _prepare_database() -> str:
 
 async def _get_exercise_count() -> int:
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(func.count()).select_from(ExerciseModel)
-        )
+        result = await session.execute(select(func.count()).select_from(ExerciseModel))
         return int(result.scalar_one())
 
 
@@ -81,7 +79,9 @@ def main() -> None:
 
     if action == "bootstrap_and_stamp":
         command.stamp(alembic_cfg, "head")
-        print("Database bootstrap completed: created schema from metadata and stamped head")
+        print(
+            "Database bootstrap completed: created schema from metadata and stamped head"
+        )
         asyncio.run(_seed_exercises_if_empty())
         return
 

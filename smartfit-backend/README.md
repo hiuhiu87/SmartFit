@@ -248,7 +248,7 @@ Deploy flow:
 3. For Render, prefer the Supavisor `Session mode` connection string on port `5432` because it supports IPv4 and is appropriate for a persistent backend service.
 4. Add `sslmode=require` if your copied URL does not already include it.
 5. In Render, create a new Blueprint and point it at the repo.
-6. When prompted for env vars, set `DATABASE_URL` to the Supabase connection string and provide secrets such as `GEMINI_API_KEY`.
+6. When prompted for env vars, set `DATABASE_URL` to the Supabase connection string and provide secrets such as `OPENROUTER_API_KEY`.
 7. Deploy the Blueprint.
 
 Notes for seeding:
@@ -299,7 +299,7 @@ Notes:
 
 - collection variables `accessToken` and `refreshToken` are filled automatically after `Login` and `Refresh Token`
 - default `baseUrl` is `http://127.0.0.1:8000`
-- some requests are included for completeness but still hit stub or TODO endpoints
+- requests cover the current implemented API surface, including auth, readiness, workouts, exercise replacement, AI chat, and progress flows
 
 ## Verification
 
@@ -313,5 +313,5 @@ Local skeleton check completed with:
 
 - Domain entities are dataclasses and do not depend on FastAPI, SQLModel, or Pydantic.
 - SQLModel table models are isolated in `src/infrastructure/database/models`.
-- Router handlers are thin and delegate to use cases or explicit TODO placeholders.
+- Router handlers are thin and delegate to use cases.
 - The readiness calculator and workout safety policy include executable domain logic with unit tests.

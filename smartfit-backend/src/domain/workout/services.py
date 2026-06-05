@@ -1,3 +1,4 @@
+from datetime import date as date_type
 from uuid import UUID, uuid4
 
 from src.domain.common.enums import (
@@ -11,6 +12,11 @@ from src.domain.common.enums import (
 )
 from src.domain.common.exceptions import ValidationError
 from src.domain.exercise.entities import Exercise
+from src.domain.progression.entities import (
+    ExercisePerformanceHistory,
+    ProgressionSuggestion,
+)
+from src.domain.progression.services import ProgressionService
 from src.domain.training.entities import TrainingRecommendationContext
 from src.domain.workout.exercise_selection_policy import ExerciseSelectionPolicy
 from src.domain.workout.entities import WorkoutPlan, WorkoutPlanExercise, WorkoutSetLog
@@ -25,9 +31,11 @@ class RuleBasedWorkoutGenerator:
         self,
         template_resolver: WorkoutTemplateResolver | None = None,
         selection_policy: ExerciseSelectionPolicy | None = None,
+        progression_service: ProgressionService | None = None,
     ) -> None:
         self.template_resolver = template_resolver or WorkoutTemplateResolver()
         self.selection_policy = selection_policy or ExerciseSelectionPolicy()
+        self.progression_service = progression_service or ProgressionService()
 
     def generate(
         self,
@@ -44,6 +52,9 @@ class RuleBasedWorkoutGenerator:
         available_equipment: list[str] | None = None,
         injuries: list[str] | None = None,
         training_context: TrainingRecommendationContext | None = None,
+        target_date: date_type | None = None,
+        recent_workouts: list[WorkoutPlan] | None = None,
+        progression_histories: dict[UUID, ExercisePerformanceHistory] | None = None,
     ) -> WorkoutPlan:
         available_equipment = self._normalize_equipment(available_equipment)
         template_focus = self._resolve_training_focus(
@@ -57,7 +68,8 @@ class RuleBasedWorkoutGenerator:
             goal=goal,
             training_level=training_level,
             readiness_score=adjusted_readiness_score,
-            recent_workouts=None,
+            recent_workouts=recent_workouts,
+            avoid_recent_repetition=focus_muscle is None,
         )
         decision = self._decision(adjusted_readiness_score)
         if adjusted_readiness_score < 20:
@@ -66,7 +78,8 @@ class RuleBasedWorkoutGenerator:
                 goal=Goal.RECOVERY.value,
                 training_level=training_level,
                 readiness_score=adjusted_readiness_score,
-                recent_workouts=None,
+                recent_workouts=recent_workouts,
+                avoid_recent_repetition=False,
             )
 
         high_fatigue_muscles = self._high_fatigue_muscles(training_context)
@@ -117,17 +130,16 @@ class RuleBasedWorkoutGenerator:
 
         plan_id = uuid4()
         plan_exercises = [
-            WorkoutPlanExercise(
-                id=uuid4(),
-                workout_plan_id=plan_id,
-                exercise_id=exercise.id,
+            self._build_plan_exercise(
+                plan_id=plan_id,
                 order_index=index + 1,
-                target_sets=self._sets_for_slot(slot, adjusted_readiness_score),
-                target_reps=self._reps_for_slot(slot, goal, adjusted_readiness_score),
-                target_rpe=self._rpe_for_slot(slot, adjusted_readiness_score),
-                target_weight=self._suggested_weight(exercise, training_context),
-                rest_seconds=self._rest_for_slot(slot, goal, adjusted_readiness_score),
-                notes=exercise.safety_notes or exercise.instruction,
+                slot=slot,
+                exercise=exercise,
+                goal=goal,
+                training_level=training_level,
+                readiness_score=adjusted_readiness_score,
+                training_context=training_context,
+                progression_histories=progression_histories,
             )
             for index, (slot, exercise) in enumerate(selected_pairs)
         ]
@@ -137,7 +149,7 @@ class RuleBasedWorkoutGenerator:
         return WorkoutPlan(
             id=plan_id,
             user_id=user_id,
-            target_date=self._today_placeholder(),
+            target_date=target_date or date_type.today(),
             title=self._title(template, goal_enum, decision),
             goal=goal_enum,
             focus=resolved_focus,
@@ -158,10 +170,72 @@ class RuleBasedWorkoutGenerator:
             exercises=plan_exercises,
         )
 
-    def _today_placeholder(self):
-        from datetime import date
+    def _build_plan_exercise(
+        self,
+        *,
+        plan_id: UUID,
+        order_index: int,
+        slot: WorkoutSlot,
+        exercise: Exercise,
+        goal: str,
+        training_level: str,
+        readiness_score: int,
+        training_context: TrainingRecommendationContext | None,
+        progression_histories: dict[UUID, ExercisePerformanceHistory] | None,
+    ) -> WorkoutPlanExercise:
+        target_sets = self._sets_for_slot(slot, readiness_score)
+        target_reps = self._reps_for_slot(slot, goal, readiness_score)
+        target_rpe = self._rpe_for_slot(slot, readiness_score)
+        target_weight = self._suggested_weight(exercise, training_context)
+        notes = exercise.safety_notes or exercise.instruction
 
-        return date.today()
+        history = (
+            progression_histories.get(exercise.id)
+            if progression_histories is not None
+            else None
+        )
+        if history is not None:
+            suggestion = self.progression_service.suggest_next_prescription(
+                history=history,
+                default_sets=target_sets,
+                default_reps=target_reps,
+                default_rpe=target_rpe,
+                training_level=training_level,
+            )
+            suggestion = self.progression_service.apply_readiness_guard(
+                suggestion=suggestion,
+                history=history,
+                readiness_score=readiness_score,
+            )
+            target_sets = suggestion.suggested_sets
+            target_reps = suggestion.suggested_reps
+            target_rpe = min(target_rpe, suggestion.suggested_rpe)
+            target_weight = suggestion.suggested_weight
+            notes = self._progression_notes(notes, suggestion)
+
+        return WorkoutPlanExercise(
+            id=uuid4(),
+            workout_plan_id=plan_id,
+            exercise_id=exercise.id,
+            order_index=order_index,
+            target_sets=target_sets,
+            target_reps=target_reps,
+            target_rpe=target_rpe,
+            target_weight=target_weight,
+            rest_seconds=self._rest_for_slot(slot, goal, readiness_score),
+            notes=notes,
+        )
+
+    def _progression_notes(
+        self, existing_notes: str | None, suggestion: ProgressionSuggestion
+    ) -> str:
+        progression_note = f"Progression: {suggestion.reason}"
+        combined = (
+            f"{existing_notes.strip()} {progression_note}"
+            if existing_notes and existing_notes.strip()
+            else progression_note
+        )
+        return combined[:1000]
 
     def _resolve_focus(self, focus_muscle: str | None) -> MuscleGroup:
         if focus_muscle is None:

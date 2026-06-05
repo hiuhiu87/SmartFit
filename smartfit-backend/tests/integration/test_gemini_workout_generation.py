@@ -23,8 +23,10 @@ from src.domain.common.exceptions import (
     AIInvalidOutputError,
     AIUnsafeOutputError,
 )
-from src.infrastructure.ai.gemini_workout_generator import GeminiWorkoutGenerator
-from src.infrastructure.database.base import utcnow
+from src.infrastructure.ai.openrouter_workout_generator import (
+    OpenRouterWorkoutGenerator,
+)
+from src.infrastructure.database.base import import_models, metadata, utcnow
 from src.infrastructure.database.models.ai_model import (
     AIRequestModel,
     AIUsageDailyModel,
@@ -69,23 +71,8 @@ async def gemini_test_context(tmp_path: Path):
     )
 
     async with engine.begin() as connection:
-        await connection.run_sync(
-            lambda sync_conn: UserModel.metadata.create_all(
-                sync_conn,
-                tables=[
-                    UserModel.__table__,
-                    UserProfileModel.__table__,
-                    UserEquipmentModel.__table__,
-                    ReadinessScoreModel.__table__,
-                    ExerciseModel.__table__,
-                    ExerciseAlternativeModel.__table__,
-                    AIRequestModel.__table__,
-                    AIUsageDailyModel.__table__,
-                    WorkoutPlanModel.__table__,
-                    WorkoutPlanExerciseModel.__table__,
-                ],
-            )
-        )
+        import_models()
+        await connection.run_sync(metadata.create_all)
 
     async with session_factory() as session:
         session.add_all(_seed_rows())
@@ -458,13 +445,13 @@ async def test_generation_mode_validation(gemini_test_context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_missing_gemini_api_key(gemini_test_context, monkeypatch) -> None:
+async def test_missing_openrouter_api_key(gemini_test_context, monkeypatch) -> None:
     app = gemini_test_context["app"]
-    container.gemini_workout_generator_impl = GeminiWorkoutGenerator(
+    container.gemini_workout_generator_impl = OpenRouterWorkoutGenerator(
         container.get_gemini_prompt_builder(),
         container.get_ai_workout_schema_validator(),
     )
-    monkeypatch.setenv("GEMINI_API_KEY", "")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
     get_settings.cache_clear()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
@@ -486,7 +473,7 @@ async def test_missing_gemini_api_key(gemini_test_context, monkeypatch) -> None:
                 "generation_mode": "auto",
             },
         )
-        gemini_response = await client.post(
+        openrouter_response = await client.post(
             "/api/v1/workouts/generate",
             headers={"Authorization": f"Bearer {access_token}"},
             json={
@@ -494,15 +481,15 @@ async def test_missing_gemini_api_key(gemini_test_context, monkeypatch) -> None:
                 "focus_muscle": "chest",
                 "available_time_minutes": 45,
                 "equipment": ["dumbbell", "bench", "bodyweight"],
-                "generation_mode": "gemini",
+                "generation_mode": "openrouter",
             },
         )
     get_settings.cache_clear()
 
     assert auto_response.status_code == 200
     assert auto_response.json()["data"]["source"] == "fallback"
-    assert gemini_response.status_code == 503
-    assert gemini_response.json()["error"]["code"] == "ai_configuration_error"
+    assert openrouter_response.status_code == 503
+    assert openrouter_response.json()["error"]["code"] == "ai_configuration_error"
 
 
 @pytest.mark.asyncio

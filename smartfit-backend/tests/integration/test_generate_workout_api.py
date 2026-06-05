@@ -15,7 +15,7 @@ from src.domain.common.enums import (
     ReadinessRecommendation,
     TrainingLevel,
 )
-from src.infrastructure.database.base import utcnow
+from src.infrastructure.database.base import import_models, metadata, utcnow
 from src.infrastructure.database.models.ai_model import (
     AIRequestModel,
     AIUsageDailyModel,
@@ -49,23 +49,8 @@ async def workout_test_context(tmp_path: Path):
     )
 
     async with engine.begin() as connection:
-        await connection.run_sync(
-            lambda sync_conn: UserModel.metadata.create_all(
-                sync_conn,
-                tables=[
-                    UserModel.__table__,
-                    UserProfileModel.__table__,
-                    UserEquipmentModel.__table__,
-                    ReadinessScoreModel.__table__,
-                    ExerciseModel.__table__,
-                    ExerciseAlternativeModel.__table__,
-                    WorkoutPlanModel.__table__,
-                    WorkoutPlanExerciseModel.__table__,
-                    AIRequestModel.__table__,
-                    AIUsageDailyModel.__table__,
-                ],
-            )
-        )
+        import_models()
+        await connection.run_sync(metadata.create_all)
 
     async with session_factory() as session:
         session.add_all(_seed_rows())

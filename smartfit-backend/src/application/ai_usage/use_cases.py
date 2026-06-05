@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from src.application.ai_usage.commands import (
     CheckAIUsageLimitCommand,
     GetAIUsageTodayQuery,
@@ -9,6 +11,7 @@ from src.application.ai_usage.dto import (
     AIUsageTodayDTO,
 )
 from src.domain.ai.entities import AIRequestLog
+from src.domain.common.enums import SubscriptionStatus
 from src.domain.ai.repositories import AIUsageRepository
 from src.domain.ai.services import AIUsagePolicy
 from src.domain.subscription.repositories import SubscriptionRepository
@@ -26,11 +29,20 @@ class AIUsageService:
         self.subscription_repository = subscription_repository
 
     async def get_plan(self, user_id) -> str:
-        # TODO: replace with real premium lookup once subscription gating is finalized.
         if self.subscription_repository is None:
             return "free"
         subscription = await self.subscription_repository.get_by_user_id(user_id)
         if subscription is None:
+            return "free"
+        if subscription.status not in {
+            SubscriptionStatus.ACTIVE,
+            SubscriptionStatus.TRIAL,
+        }:
+            return "free"
+        if (
+            subscription.expires_at is not None
+            and subscription.expires_at <= datetime.now(timezone.utc)
+        ):
             return "free"
         return subscription.plan.value
 
