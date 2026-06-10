@@ -106,6 +106,7 @@ class OpenRouterWorkoutGenerator(AIWorkoutGeneratorPort):
 
         try:
             result = self.schema_validator.validate_workout_output(raw_payload)
+            result.provider = "openrouter"
         except AIInvalidOutputError as exc:
             logger.warning(
                 "OpenRouter workout schema validation failed for user %s: %s parsed_payload=%s",

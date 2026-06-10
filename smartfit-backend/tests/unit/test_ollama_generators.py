@@ -65,6 +65,11 @@ async def test_ollama_workout_generator_success(monkeypatch) -> None:
     assert len(called_payloads) == 1
     assert called_payloads[0][0] == "https://hiuhiu87-my-ollama-api.hf.space/api/generate"
     assert "prompt" in called_payloads[0][1]
+    prompt = called_payloads[0][1]["prompt"]
+    assert "Allowed exercise catalog:" in prompt
+    assert "Valid exercise_slug values are exactly: dumbbell-press" in prompt
+    assert "slug=dumbbell-press" in prompt
+    assert "Never create, translate, rename, abbreviate, or guess exercise_slug values." in prompt
     assert "model" not in called_payloads[0][1]
 
 

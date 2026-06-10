@@ -290,7 +290,7 @@ class ProgramService:
                 equipment=equipment,
                 focus_muscle=None,
                 level=profile.training_level.value,
-                limit=200,
+                limit=2000,
             )
             if not allowed:
                 allowed = await self.exercise_repository.find_allowed(
@@ -301,7 +301,7 @@ class ProgramService:
                     ],
                     focus_muscle=None,
                     level=profile.training_level.value,
-                    limit=200,
+                    limit=2000,
                 )
 
             exercise_ids = [e.id for e in allowed]
@@ -451,7 +451,7 @@ class ProgramService:
             equipment=equipment,
             focus_muscle=None,
             level=profile.training_level.value,
-            limit=200,
+            limit=2000,
         )
         if not allowed:
             allowed = await self.exercise_repository.find_allowed(
@@ -462,7 +462,7 @@ class ProgramService:
                 ],
                 focus_muscle=None,
                 level=profile.training_level.value,
-                limit=200,
+                limit=2000,
             )
 
         exercise_ids = [e.id for e in allowed]

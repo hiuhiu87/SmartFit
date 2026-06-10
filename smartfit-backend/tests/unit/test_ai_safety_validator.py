@@ -60,3 +60,51 @@ def test_workout_safety_validator_blocks_zero_rest_for_non_continuous_exercise()
 
     with pytest.raises(AIUnsafeOutputError):
         validator.validate(result, context)
+
+
+def test_workout_safety_validator_rejects_bodyweight_when_not_requested() -> None:
+    validator = AIWorkoutSafetyValidator()
+    context = AIWorkoutGenerationContext(
+        user_id=uuid4(),
+        target_date=date(2026, 6, 1),
+        goal="muscle_gain",
+        training_level="intermediate",
+        readiness_score=80,
+        readiness_category="excellent",
+        readiness_recommendation="train_hard",
+        focus_muscle="chest",
+        available_time_minutes=45,
+        equipment=["dumbbell", "machine"],
+        allowed_exercises=[
+            AIAllowedExercise(
+                exercise_id=uuid4(),
+                name="Push-up",
+                slug="push-up",
+                primary_muscle="chest",
+                equipment="bodyweight",
+                difficulty="beginner",
+                movement_type="push",
+                movement_pattern="horizontal_push",
+            )
+        ],
+        movement_pattern_requirements=["horizontal_push"],
+    )
+    result = AIWorkoutGenerationResult(
+        workout_title="Chest Session",
+        training_decision="normal_volume",
+        estimated_duration_minutes=30,
+        exercises=[
+            AIWorkoutExerciseResult(
+                exercise_slug="push-up",
+                sets=3,
+                reps="8-10",
+                rest_seconds=60,
+                rpe=7,
+            )
+        ],
+        reasoning_summary="Test payload.",
+        safety_note="Stop if you feel sharp pain.",
+    )
+
+    with pytest.raises(AIUnsafeOutputError, match="unsupported equipment"):
+        validator.validate(result, context)

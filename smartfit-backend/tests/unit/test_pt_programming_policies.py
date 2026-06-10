@@ -354,6 +354,335 @@ def test_ai_shortlist_covers_push_patterns_and_equipment_categories() -> None:
     assert len(shortlisted) == 16
 
 
+def test_chest_focus_requires_horizontal_push_without_forcing_shoulders() -> None:
+    use_case = GenerateWorkoutUseCase(
+        None,
+        None,
+        None,
+        None,
+        RuleBasedWorkoutGenerator(),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
+    assert use_case._movement_pattern_requirements("chest", "upper_body") == [
+        "horizontal_push"
+    ]
+    assert use_case._movement_pattern_requirements("shoulders", "upper_body") == [
+        "vertical_push"
+    ]
+    assert use_case._movement_pattern_requirements("push", "push") == [
+        "horizontal_push",
+        "vertical_push",
+    ]
+
+
+def test_ai_shortlist_is_capped_and_diverse_for_full_body() -> None:
+    use_case = GenerateWorkoutUseCase(
+        None,
+        None,
+        None,
+        None,
+        RuleBasedWorkoutGenerator(),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    candidates = []
+    for index in range(8):
+        candidates.extend(
+            [
+                _exercise(
+                    f"Dumbbell Squat {index}",
+                    EquipmentType.DUMBBELL,
+                    "squat",
+                    "main_compound",
+                    MuscleGroup.LEGS,
+                ),
+                _exercise(
+                    f"Dumbbell RDL {index}",
+                    EquipmentType.DUMBBELL,
+                    "hinge",
+                    "main_compound",
+                    MuscleGroup.LEGS,
+                ),
+                _exercise(
+                    f"Push Up {index}",
+                    EquipmentType.BODYWEIGHT,
+                    "horizontal_push",
+                    "main_compound",
+                    MuscleGroup.CHEST,
+                ),
+                _exercise(
+                    f"Dumbbell Row {index}",
+                    EquipmentType.DUMBBELL,
+                    "horizontal_pull",
+                    "main_compound",
+                    MuscleGroup.BACK,
+                ),
+            ]
+        )
+
+    shortlisted = use_case._select_ai_allowed_exercises(
+        candidates,
+        focus_muscle="full_body",
+        workout_split="full_body",
+        avoid_exercises=[],
+    )
+
+    patterns = {item.movement_pattern for item in shortlisted}
+    muscles = {item.muscle_group.value for item in shortlisted}
+    assert len(shortlisted) == 16
+    assert {"squat", "hinge", "horizontal_push", "horizontal_pull"} <= patterns
+    assert {"legs", "chest", "back"} <= muscles
+
+
+def test_ai_shortlist_excludes_exercises_conflicting_with_limitations() -> None:
+    use_case = GenerateWorkoutUseCase(
+        None,
+        None,
+        None,
+        None,
+        RuleBasedWorkoutGenerator(),
+        None,
+        None,
+        AIWorkoutSafetyValidator(),
+        None,
+        None,
+    )
+    candidates = [
+        _exercise(
+            "Dumbbell Goblet Squat",
+            EquipmentType.DUMBBELL,
+            "squat",
+            "main_compound",
+            MuscleGroup.LEGS,
+        ),
+        _exercise(
+            "Dumbbell Row",
+            EquipmentType.DUMBBELL,
+            "horizontal_pull",
+            "main_compound",
+            MuscleGroup.BACK,
+        ),
+        _exercise(
+            "Push Up",
+            EquipmentType.BODYWEIGHT,
+            "horizontal_push",
+            "main_compound",
+            MuscleGroup.CHEST,
+        ),
+    ]
+    profile = SimpleNamespace(
+        injuries=["knee soreness"],
+        movement_limitations=[],
+        pain_areas=[],
+        pain_movements=[],
+    )
+
+    shortlisted = use_case._select_ai_allowed_exercises(
+        candidates,
+        focus_muscle="full_body",
+        workout_split="full_body",
+        avoid_exercises=[],
+        profile=profile,
+    )
+
+    assert "dumbbell-goblet-squat" not in {item.slug for item in shortlisted}
+    assert {"dumbbell-row", "push-up"} == {item.slug for item in shortlisted}
+
+
+def test_ai_result_repair_orders_exercises_before_safety_validation() -> None:
+    validator = AIWorkoutSafetyValidator()
+    use_case = GenerateWorkoutUseCase(
+        None,
+        None,
+        None,
+        None,
+        RuleBasedWorkoutGenerator(),
+        None,
+        None,
+        validator,
+        None,
+        None,
+    )
+    allowed = [
+        AIAllowedExercise(
+            exercise_id=uuid4(),
+            name="Dumbbell Bench Press",
+            slug="dumbbell-bench-press",
+            primary_muscle="chest",
+            equipment="dumbbell",
+            difficulty="beginner",
+            movement_type="horizontal_push",
+            movement_pattern="horizontal_push",
+            exercise_role="main_compound",
+        ),
+        AIAllowedExercise(
+            exercise_id=uuid4(),
+            name="Assisted Chest Dip",
+            slug="assisted-chest-dip",
+            primary_muscle="chest",
+            equipment="machine",
+            difficulty="beginner",
+            movement_type="horizontal_push",
+            movement_pattern="horizontal_push",
+            exercise_role="secondary_compound",
+        ),
+        AIAllowedExercise(
+            exercise_id=uuid4(),
+            name="Lever Seated Fly",
+            slug="lever-seated-fly",
+            primary_muscle="chest",
+            equipment="machine",
+            difficulty="beginner",
+            movement_type="horizontal_push",
+            movement_pattern="horizontal_push",
+            exercise_role="isolation",
+        ),
+    ]
+    context = AIWorkoutGenerationContext(
+        user_id=uuid4(),
+        target_date=date.today(),
+        goal="muscle_gain",
+        training_level="beginner",
+        readiness_score=89,
+        readiness_category="excellent",
+        readiness_recommendation="train_hard",
+        focus_muscle="chest",
+        available_time_minutes=65,
+        equipment=["dumbbell", "machine"],
+        allowed_exercises=allowed,
+        movement_pattern_requirements=["horizontal_push"],
+        target_exercise_count_min=3,
+        target_exercise_count_max=5,
+    )
+    result = AIWorkoutGenerationResult(
+        workout_title="Chest Day",
+        training_decision="normal_volume",
+        estimated_duration_minutes=45,
+        exercises=[
+            AIWorkoutExerciseResult(
+                exercise_slug="lever-seated-fly",
+                sets=3,
+                reps="12-15",
+                rest_seconds=60,
+                rpe=6,
+            ),
+            AIWorkoutExerciseResult(
+                exercise_slug="assisted-chest-dip",
+                sets=3,
+                reps="8-10",
+                rest_seconds=90,
+                rpe=7,
+            ),
+            AIWorkoutExerciseResult(
+                exercise_slug="dumbbell-bench-press",
+                sets=3,
+                reps="8-10",
+                rest_seconds=90,
+                rpe=7,
+            ),
+        ],
+        reasoning_summary="Test",
+        safety_note="Stop for pain.",
+    )
+
+    repaired = use_case._repair_ai_workout_result(result, context)
+
+    assert [item.exercise_slug for item in repaired.exercises] == [
+        "dumbbell-bench-press",
+        "assisted-chest-dip",
+        "lever-seated-fly",
+    ]
+    validator.validate(repaired, context)
+
+
+def test_ai_result_repair_adds_missing_required_pattern_when_possible() -> None:
+    validator = AIWorkoutSafetyValidator()
+    use_case = GenerateWorkoutUseCase(
+        None,
+        None,
+        None,
+        None,
+        RuleBasedWorkoutGenerator(),
+        None,
+        None,
+        validator,
+        None,
+        None,
+    )
+    allowed = [
+        AIAllowedExercise(
+            exercise_id=uuid4(),
+            name="Dumbbell Bench Press",
+            slug="dumbbell-bench-press",
+            primary_muscle="chest",
+            equipment="dumbbell",
+            difficulty="beginner",
+            movement_type="horizontal_push",
+            movement_pattern="horizontal_push",
+            exercise_role="main_compound",
+        ),
+        AIAllowedExercise(
+            exercise_id=uuid4(),
+            name="Dumbbell Shoulder Press",
+            slug="dumbbell-shoulder-press",
+            primary_muscle="shoulders",
+            equipment="dumbbell",
+            difficulty="beginner",
+            movement_type="vertical_push",
+            movement_pattern="vertical_push",
+            exercise_role="main_compound",
+        ),
+    ]
+    context = AIWorkoutGenerationContext(
+        user_id=uuid4(),
+        target_date=date.today(),
+        goal="muscle_gain",
+        training_level="beginner",
+        readiness_score=80,
+        readiness_category="excellent",
+        readiness_recommendation="train_hard",
+        focus_muscle="push",
+        available_time_minutes=45,
+        equipment=["dumbbell"],
+        allowed_exercises=allowed,
+        movement_pattern_requirements=["horizontal_push", "vertical_push"],
+        target_exercise_count_min=2,
+        target_exercise_count_max=4,
+    )
+    result = AIWorkoutGenerationResult(
+        workout_title="Push Day",
+        training_decision="normal_volume",
+        estimated_duration_minutes=40,
+        exercises=[
+            AIWorkoutExerciseResult(
+                exercise_slug="dumbbell-bench-press",
+                sets=3,
+                reps="8-10",
+                rest_seconds=90,
+                rpe=7,
+            )
+        ],
+        reasoning_summary="Test",
+        safety_note="Stop for pain.",
+    )
+
+    repaired = use_case._repair_ai_workout_result(result, context)
+
+    assert {item.exercise_slug for item in repaired.exercises} == {
+        "dumbbell-bench-press",
+        "dumbbell-shoulder-press",
+    }
+    validator.validate(repaired, context)
+
+
 def test_ai_safety_rejects_missing_required_movement_patterns() -> None:
     allowed = AIAllowedExercise(
         exercise_id=uuid4(),

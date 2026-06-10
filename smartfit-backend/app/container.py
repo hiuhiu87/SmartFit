@@ -74,6 +74,7 @@ from src.infrastructure.ai.openrouter_workout_generator import (
 )
 from src.infrastructure.ai.ollama_workout_generator import OllamaWorkoutGenerator
 from src.infrastructure.ai.ollama_chat_generator import OllamaAIChatGenerator
+from src.infrastructure.ai.fallback_generators import FallbackWorkoutGenerator, FallbackAIChatGenerator
 from src.infrastructure.ai.output_mapper import AIWorkoutOutputMapper
 from src.infrastructure.ai.safety_validator import (
     AIChatSafetyValidator,
@@ -143,15 +144,27 @@ class Container:
         self.ai_chat_safety_validator = AIChatSafetyValidator()
         self.ai_workout_output_mapper = AIWorkoutOutputMapper()
         self.gemini_workout_generator_impl: AIWorkoutGeneratorPort = (
-            OpenRouterWorkoutGenerator(
-                self.gemini_prompt_builder,
-                self.ai_workout_schema_validator,
+            FallbackWorkoutGenerator(
+                ollama_generator=OllamaWorkoutGenerator(
+                    self.gemini_prompt_builder,
+                    self.ai_workout_schema_validator,
+                ),
+                openrouter_generator=OpenRouterWorkoutGenerator(
+                    self.gemini_prompt_builder,
+                    self.ai_workout_schema_validator,
+                ),
             )
         )
         self.gemini_ai_chat_generator_impl: AIWorkoutGeneratorPort = (
-            OpenRouterAIChatGenerator(
-                self.gemini_chat_prompt_builder,
-                self.ai_chat_schema_validator,
+            FallbackAIChatGenerator(
+                ollama_generator=OllamaAIChatGenerator(
+                    self.gemini_chat_prompt_builder,
+                    self.ai_chat_schema_validator,
+                ),
+                openrouter_generator=OpenRouterAIChatGenerator(
+                    self.gemini_chat_prompt_builder,
+                    self.ai_chat_schema_validator,
+                ),
             )
         )
 
@@ -371,12 +384,6 @@ class Container:
         return self.ai_workout_output_mapper
 
     def get_gemini_workout_generator(self) -> AIWorkoutGeneratorPort:
-        settings = get_settings()
-        if settings.AI_PROVIDER == "ollama":
-            return OllamaWorkoutGenerator(
-                self.gemini_prompt_builder,
-                self.ai_workout_schema_validator,
-            )
         return self.gemini_workout_generator_impl
 
     def get_gemini_chat_prompt_builder(self) -> GeminiChatPromptBuilder:
@@ -389,12 +396,6 @@ class Container:
         return self.ai_chat_safety_validator
 
     def get_gemini_ai_chat_generator(self) -> AIWorkoutGeneratorPort:
-        settings = get_settings()
-        if settings.AI_PROVIDER == "ollama":
-            return OllamaAIChatGenerator(
-                self.gemini_chat_prompt_builder,
-                self.ai_chat_schema_validator,
-            )
         return self.gemini_ai_chat_generator_impl
 
     def get_workout_detail_use_case(

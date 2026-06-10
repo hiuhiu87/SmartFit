@@ -84,6 +84,7 @@ class OllamaAIChatGenerator(AIWorkoutGeneratorPort):
 
         try:
             result = self.schema_validator.validate(raw_payload)
+            result.provider = "ollama"
         except AIChatInvalidOutputError as exc:
             logger.warning(
                 "Ollama chat validation failed for user %s: %s",

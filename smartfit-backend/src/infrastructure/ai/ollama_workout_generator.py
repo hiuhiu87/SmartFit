@@ -76,6 +76,7 @@ class OllamaWorkoutGenerator(AIWorkoutGeneratorPort):
 
         try:
             result = self.schema_validator.validate_workout_output(raw_payload)
+            result.provider = "ollama"
         except AIInvalidOutputError as exc:
             logger.warning(
                 "Ollama workout schema validation failed for user %s: %s",

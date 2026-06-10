@@ -206,8 +206,10 @@ class AIChatUseCase:
         )
 
         started = perf_counter()
+        provider = "openrouter"
         try:
             result = await self.ai_chat_generator.chat(context)
+            provider = getattr(result, "provider", "openrouter")
             self.ai_chat_safety_validator.validate(result, context)
             latency_ms = int((perf_counter() - started) * 1000)
             await self.ai_usage_service.record(
@@ -223,6 +225,7 @@ class AIChatUseCase:
                         output_payload=self._result_payload(result),
                         fallback_used=False,
                         latency_ms=latency_ms,
+                        provider=provider,
                     ),
                 )
             )
@@ -240,6 +243,7 @@ class AIChatUseCase:
             Exception,
         ) as exc:
             latency_ms = int((perf_counter() - started) * 1000)
+            provider_failed = getattr(exc, "provider", "openrouter")
             print(f"\n\n[WARNING] AI CHAT GENERATION FAILED, FALLING BACK TO SAFE RESPONSE. ERROR: {exc}\n\n", flush=True)
             logger.exception(
                 "AI chat generation failed, falling back to safe response. Error: %s - %s",
@@ -262,6 +266,7 @@ class AIChatUseCase:
                         error_message=str(exc),
                         fallback_used=True,
                         latency_ms=latency_ms,
+                        provider=provider_failed,
                     ),
                 )
             )
@@ -480,15 +485,17 @@ class AIChatUseCase:
         error_message: str | None = None,
         fallback_used: bool = False,
         latency_ms: int | None = None,
+        provider: str | None = None,
     ) -> AIRequestLog:
         settings = get_settings()
+        actual_provider = provider or settings.AI_PROVIDER
         return AIRequestLog(
             id=request_id,
             user_id=command.user_id,
             workout_plan_id=command.workout_id,
             request_type="chat",
-            provider=settings.AI_PROVIDER,
-            model_name=settings.OPENROUTER_MODEL,
+            provider=actual_provider,
+            model_name=settings.OPENROUTER_MODEL if actual_provider == "openrouter" else settings.OLLAMA_MODEL,
             generation_mode=None,
             input_payload=input_payload,
             output_payload=output_payload or {},

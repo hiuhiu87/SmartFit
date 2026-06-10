@@ -140,7 +140,7 @@ class FullProgramGenerator:
                 equipment=equipment,
                 focus_muscle=None,
                 level=profile.training_level.value,
-                limit=200,
+                limit=2000,
             )
             if not allowed:
                 allowed = await self.exercise_repository.find_allowed(
@@ -151,7 +151,7 @@ class FullProgramGenerator:
                     ],
                     focus_muscle=None,
                     level=profile.training_level.value,
-                    limit=200,
+                    limit=2000,
                 )
 
             # Load progression history

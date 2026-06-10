@@ -79,11 +79,7 @@ class SQLModelExerciseRepository(ExerciseRepository):
         level: str | None,
         limit: int = 100,
     ) -> list[Exercise]:
-        allowed_equipment = list(
-            dict.fromkeys(
-                equipment + (["bodyweight"] if "bodyweight" not in equipment else [])
-            )
-        )
+        allowed_equipment = list(dict.fromkeys(equipment))
         base_filters = [
             ExerciseModel.is_active.is_(True),
             ExerciseModel.equipment_type.in_(allowed_equipment),
@@ -143,11 +139,7 @@ class SQLModelExerciseRepository(ExerciseRepository):
         level: str | None,
         limit: int = 5,
     ) -> list[Exercise]:
-        allowed_equipment = list(
-            dict.fromkeys(
-                equipment + (["bodyweight"] if "bodyweight" not in equipment else [])
-            )
-        )
+        allowed_equipment = list(dict.fromkeys(equipment))
         filters = [
             ExerciseModel.is_active.is_(True),
             ExerciseModel.id != current_exercise_id,

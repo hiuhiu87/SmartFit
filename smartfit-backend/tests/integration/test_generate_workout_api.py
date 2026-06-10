@@ -162,9 +162,7 @@ async def test_generate_chest_dumbbell_workout_success(workout_test_context) -> 
     assert payload["estimated_duration_minutes"] == 60
     assert len(payload["exercises"]) >= 5
     assert payload["exercises"]
-    assert all(
-        item["equipment"] in {"dumbbell", "bodyweight"} for item in payload["exercises"]
-    )
+    assert all(item["equipment"] == "dumbbell" for item in payload["exercises"])
 
     async with session_factory() as session:
         saved = await session.get(WorkoutPlanModel, UUID(payload["workout_id"]))
@@ -246,7 +244,7 @@ async def test_generate_low_readiness_recovery_workout(workout_test_context) -> 
                 "date": "2026-05-31",
                 "focus_muscle": "chest",
                 "available_time_minutes": 45,
-                "equipment": ["dumbbell"],
+                "equipment": ["dumbbell", "bodyweight"],
                 "generation_mode": "rule_based",
                 "avoid_exercises": [],
             },
@@ -321,9 +319,7 @@ async def test_generate_workout_uses_user_default_equipment_when_request_equipme
     assert response.status_code == 200
     payload = response.json()["data"]
     assert payload["exercises"]
-    assert all(
-        item["equipment"] in {"dumbbell", "bodyweight"} for item in payload["exercises"]
-    )
+    assert all(item["equipment"] == "dumbbell" for item in payload["exercises"])
 
 
 @pytest.mark.asyncio

@@ -60,10 +60,33 @@ class GeminiPromptBuilder:
             if context.role_distribution
             else "none"
         )
+        allowed_catalog = (
+            "\n".join(
+                [
+                    "- "
+                    f"slug={item.slug} | name={item.name} | muscle={item.primary_muscle} | "
+                    f"equipment={item.equipment} | pattern={item.movement_pattern or item.movement_type or 'unknown'} | "
+                    f"role={item.exercise_role or 'accessory'}"
+                    for item in context.allowed_exercises
+                ]
+            )
+            if context.allowed_exercises
+            else "none"
+        )
+        allowed_slugs = (
+            ", ".join(item.slug for item in context.allowed_exercises)
+            if context.allowed_exercises
+            else "none"
+        )
 
         return (
             "Return JSON only. No markdown. No comments. No extra text.\n"
-            "Do not invent exercises. Respect readiness, equipment, time, avoid list, and level.\n\n"
+            "Do not invent exercises. Respect readiness, equipment, time, avoid list, and level.\n"
+            "CRITICAL EXERCISE SLUG RULE:\n"
+            "- You must choose exercise_slug values by copying exact slugs from the Allowed exercise catalog below.\n"
+            "- Never create, translate, rename, abbreviate, or guess exercise_slug values.\n"
+            "- If an exercise is not in the catalog, do not use it.\n"
+            f"- Valid exercise_slug values are exactly: {allowed_slugs}.\n\n"
             "Do not invent previous performance. If progression data is absent, leave weight unspecified.\n"
             "Do not select any exercise that conflicts with injuries, pain, or movement limitations.\n\n"
             "rest_seconds rules:\n"
@@ -95,6 +118,7 @@ class GeminiPromptBuilder:
             f"score: {context.readiness_score}\n"
             f"category: {context.readiness_category}\n"
             f"recommendation: {context.readiness_recommendation}\n\n"
+            f"Allowed exercise catalog:\n{allowed_catalog}\n\n"
             f"Progression Suggestions per exercise:\n{progression_lines}\n\n"
             "Return JSON schema:\n"
             "{\n"

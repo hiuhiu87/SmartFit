@@ -179,6 +179,7 @@ class AIWorkoutGenerationResult:
     exercises: list[AIWorkoutExerciseResult] = field(default_factory=list)
     reasoning_summary: str = ""
     safety_note: str = ""
+    provider: str = "openrouter"
 
 
 @dataclass(slots=True)
@@ -198,6 +199,7 @@ class AIChatResult:
     reply: str
     intent: str
     suggested_action: AIChatSuggestedAction | None = None
+    provider: str = "openrouter"
 
 
 @dataclass(slots=True)

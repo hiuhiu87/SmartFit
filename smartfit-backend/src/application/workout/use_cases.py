@@ -13,7 +13,9 @@ from src.domain.ai.entities import (
     AIAllowedExercise,
     AIProgressionContext,
     AIRequestLog,
+    AIWorkoutExerciseResult,
     AIWorkoutGenerationContext,
+    AIWorkoutGenerationResult,
 )
 from src.domain.ai.ports import AIWorkoutGeneratorPort
 from src.application.workout.commands import (
@@ -155,7 +157,7 @@ class GenerateWorkoutUseCase:
             equipment=equipment,
             focus_muscle=None,
             level=profile.training_level.value,
-            limit=100,
+            limit=2000,
         )
         if not allowed:
             allowed = await self.exercise_repository.find_allowed(
@@ -166,36 +168,47 @@ class GenerateWorkoutUseCase:
                 ],
                 focus_muscle=None,
                 level=profile.training_level.value,
-                limit=100,
+                limit=2000,
             )
         if not allowed:
             raise ValidationError("Workout generation failed: no exercises found.")
 
-        usage_date = self._usage_date()
-        ai_input_payload = {
-            "readiness_score": int(round(readiness.score)),
-            "readiness_category": readiness.category.value,
-            "equipment": equipment,
-            "workout_split": command.workout_split,
-            "focus_muscle": command.focus_muscle,
-            "allowed_exercise_slugs": [item.slug for item in allowed[:16]],
-        }
         training_context = await self._build_training_context(command)
         recent_workouts = await self._build_recent_workouts(command)
         progression_histories = await self._build_progression_histories(
             command.user_id, allowed
         )
-        if training_context is not None:
-            ai_input_payload["training_context"] = self._training_context_payload(
-                training_context
-            )
-
         goal = command.goal_override or profile.primary_goal.value
         training_style = self._effective_training_style(
             profile,
             command.training_style_override or profile.training_style.value,
             has_explicit_override=command.training_style_override is not None,
         )
+        usage_date = self._usage_date()
+        effective_ai_focus = command.focus_muscle
+        if effective_ai_focus is None and training_context is not None:
+            effective_ai_focus = training_context.suggested_focus
+        ai_allowed_for_payload = self._select_ai_allowed_exercises(
+            allowed=allowed,
+            focus_muscle=effective_ai_focus,
+            workout_split=command.workout_split,
+            avoid_exercises=command.avoid_exercises,
+            profile=profile,
+        )
+        ai_input_payload = {
+            "readiness_score": int(round(readiness.score)),
+            "readiness_category": readiness.category.value,
+            "equipment": equipment,
+            "workout_split": command.workout_split,
+            "focus_muscle": effective_ai_focus,
+            "allowed_exercise_slugs": [item.slug for item in ai_allowed_for_payload],
+            "allowed_exercise_count": len(ai_allowed_for_payload),
+            "raw_allowed_exercise_count": len(allowed),
+        }
+        if training_context is not None:
+            ai_input_payload["training_context"] = self._training_context_payload(
+                training_context
+            )
         if command.generation_mode == "rule_based":
             plan = self._generate_rule_based(
                 command,
@@ -434,7 +447,12 @@ class GenerateWorkoutUseCase:
             focus_muscle=effective_focus,
             workout_split=command.workout_split,
             avoid_exercises=command.avoid_exercises,
+            profile=profile,
         )
+        if not ai_allowed:
+            raise AIUnsafeOutputError(
+                "No AI-safe exercises remain after applying movement limitations."
+            )
         target_min, target_max = self.volume_policy.target_exercise_count(
             training_level,
             command.available_time_minutes,
@@ -542,17 +560,36 @@ class GenerateWorkoutUseCase:
                 for item in result.exercises
             ],
         )
+        repaired_result = self._repair_ai_workout_result(result, context)
+        if repaired_result.exercises != result.exercises:
+            logger.info(
+                "AI workout result repaired before safety validation for user %s exercises=%s",
+                command.user_id,
+                [
+                    {
+                        "slug": item.exercise_slug,
+                        "sets": item.sets,
+                        "reps": item.reps,
+                        "rest_seconds": item.rest_seconds,
+                        "rpe": item.rpe,
+                    }
+                    for item in repaired_result.exercises
+                ],
+            )
+            result = repaired_result
         self.ai_safety_validator.validate(result, context)
         logger.info("AI workout safety validation passed for user %s", command.user_id)
         plan = self.ai_output_mapper.to_workout_plan(result, context)
+        provider = getattr(result, "provider", "openrouter")
         logger.info(
-            "AI workout mapped to plan for user %s title=%s source=%s exercise_count=%s",
+            "AI workout mapped to plan for user %s title=%s source=%s exercise_count=%s provider=%s",
             command.user_id,
             plan.title,
             plan.source.value,
             len(plan.exercises),
+            provider,
         )
-        return plan
+        return plan, provider
 
     async def _generate_with_ai_with_logging(
         self,
@@ -571,8 +608,9 @@ class GenerateWorkoutUseCase:
     ):
         request_id = uuid4()
         started = perf_counter()
+        provider = "openrouter"
         try:
-            plan = await self._generate_with_ai(
+            plan, provider = await self._generate_with_ai(
                 command,
                 goal,
                 training_level,
@@ -595,6 +633,7 @@ class GenerateWorkoutUseCase:
             Exception,
         ) as exc:
             latency_ms = int((perf_counter() - started) * 1000)
+            provider_failed = getattr(exc, "provider", "openrouter")
             print(
                 f"\n\n[WARNING] AI WORKOUT GENERATION FAILED (mode={command.generation_mode}). ERROR: {exc}\n\n",
                 flush=True,
@@ -627,6 +666,7 @@ class GenerateWorkoutUseCase:
                         error_message=str(exc),
                         fallback_used=command.generation_mode == "auto",
                         latency_ms=latency_ms,
+                        provider=provider_failed,
                     ),
                 )
             )
@@ -652,15 +692,17 @@ class GenerateWorkoutUseCase:
                     output_payload=output_payload,
                     fallback_used=False,
                     latency_ms=latency_ms,
+                    provider=provider,
                 ),
             )
         )
         logger.info(
-            "AI workout generation succeeded for user %s mode=%s latency_ms=%s output_payload=%s",
+            "AI workout generation succeeded for user %s mode=%s latency_ms=%s output_payload=%s provider=%s",
             command.user_id,
             command.generation_mode,
             latency_ms,
             output_payload,
+            provider,
         )
         return plan
 
@@ -739,11 +781,14 @@ class GenerateWorkoutUseCase:
         if focus in {
             "upper_body_push",
             "push",
-            "chest",
             "upper_push_balanced",
             "upper_push_focus",
         }:
             return ["horizontal_push", "vertical_push"]
+        if focus == "chest":
+            return ["horizontal_push"]
+        if focus == "shoulders":
+            return ["vertical_push"]
         if focus in {
             "lower_body",
             "legs",
@@ -847,111 +892,285 @@ class GenerateWorkoutUseCase:
         focus_muscle: str | None,
         workout_split: str,
         avoid_exercises: list[str],
+        profile=None,
     ) -> list[Exercise]:
         avoid_set = {item.strip().lower() for item in avoid_exercises}
-        required_patterns = self._movement_pattern_requirements(
-            focus_muscle, workout_split
-        )
-        focus_muscles = self._focus_muscles(focus_muscle, workout_split)
-
-        def _score(item: Exercise) -> tuple[int, int, int, int, int, str]:
-            movement_pattern = self._exercise_movement_pattern(item)
-            focus_match = int(item.muscle_group.value in focus_muscles)
-            split_match = int(self._matches_workout_split(item, workout_split))
-            required_pattern_match = int(movement_pattern in required_patterns)
-            compound_bonus = int(
-                item.exercise_role in {"main_compound", "secondary_compound"}
-            )
-            primary_muscle_bonus = int(
-                item.muscle_group.value not in {"arms", "core", "mobility", "cardio"}
-            )
-            return (
-                -required_pattern_match,
-                -focus_match,
-                -split_match,
-                -compound_bonus,
-                -primary_muscle_bonus,
-                item.name,
-            )
-
-        filtered = [
+        candidates = [
             item
             for item in allowed
             if item.slug.lower() not in avoid_set and item.name.lower() not in avoid_set
         ]
-        if not filtered:
-            return allowed[:AI_ALLOWED_EXERCISES_LIMIT]
+        if profile is not None:
+            candidates = [
+                item
+                for item in candidates
+                if not self.ai_safety_validator.exercise_conflicts_with_limitations(
+                    item,
+                    injuries=list(profile.injuries),
+                    movement_limitations=list(profile.movement_limitations),
+                    pain_areas=list(profile.pain_areas),
+                    pain_movements=list(profile.pain_movements),
+                )
+            ]
+        if len(candidates) <= AI_ALLOWED_EXERCISES_LIMIT:
+            return candidates
 
-        ranked = sorted(filtered, key=_score)
+        focus_muscles = self._focus_muscles(focus_muscle, workout_split)
+        required_patterns = self._movement_pattern_requirements(
+            focus_muscle, workout_split
+        )
+
+        preferred = [
+            item for item in candidates if item.muscle_group.value in focus_muscles
+        ]
+        if not preferred:
+            preferred = candidates
+
+        preferred_ordered = sorted(
+            preferred,
+            key=lambda item: (
+                self._candidate_priority(item, required_patterns),
+                item.name.lower(),
+                item.slug.lower(),
+            ),
+        )
+        if len(preferred) < len(candidates):
+            preferred_ids = {item.id for item in preferred}
+            secondary_ordered = sorted(
+                [item for item in candidates if item.id not in preferred_ids],
+                key=lambda item: (
+                    self._candidate_priority(item, required_patterns),
+                    item.name.lower(),
+                    item.slug.lower(),
+                ),
+            )
+        else:
+            secondary_ordered = []
+        ordered = preferred_ordered + secondary_ordered
+
         selected: list[Exercise] = []
         selected_ids: set[UUID] = set()
 
-        def add_candidates(candidates: list[Exercise], limit: int) -> None:
-            added = 0
-            for candidate in candidates:
-                if candidate.id in selected_ids:
-                    continue
-                selected.append(candidate)
-                selected_ids.add(candidate.id)
-                added += 1
-                if added >= limit or len(selected) >= AI_ALLOWED_EXERCISES_LIMIT:
-                    break
+        def add(item: Exercise) -> None:
+            if (
+                len(selected) < AI_ALLOWED_EXERCISES_LIMIT
+                and item.id not in selected_ids
+            ):
+                selected.append(item)
+                selected_ids.add(item.id)
 
-        # Give the model multiple valid choices for every required movement slot.
         for pattern in required_patterns:
-            pattern_candidates = [
+            pattern_matches = [
                 item
-                for item in ranked
+                for item in ordered
                 if self._exercise_movement_pattern(item) == pattern
             ]
-            add_candidates(
-                self._prefer_distinct_equipment_categories(pattern_candidates),
-                limit=3,
-            )
+            for item in self._prefer_distinct_equipment_categories(pattern_matches):
+                add(item)
+                break
 
-        # Ensure the prompt contains actual alternatives across available categories.
-        available_categories = {
-            get_equipment_category(item.equipment_type.value) for item in ranked
-        } - {"other"}
-        for category in (
-            "free_weight",
-            "machine",
-            "cable",
-            "bodyweight",
-            "cardio",
-        ):
-            if category not in available_categories:
-                continue
-            category_candidates = [
-                item
-                for item in ranked
-                if get_equipment_category(item.equipment_type.value) == category
+        for muscle in focus_muscles:
+            muscle_matches = [
+                item for item in ordered if item.muscle_group.value == muscle
             ]
-            add_candidates(category_candidates, limit=2)
+            for item in self._prefer_distinct_equipment_categories(muscle_matches):
+                add(item)
+                break
 
-        # Preserve role variety so the model can satisfy the ordering policy.
-        for roles in (
-            {"main_compound", "secondary_compound"},
-            {"accessory"},
-            {"isolation", "corrective"},
-            {"finisher"},
-        ):
-            add_candidates(
-                [item for item in ranked if item.exercise_role in roles],
-                limit=2,
-            )
+        seen_categories = {
+            get_equipment_category(item.equipment_type.value) for item in selected
+        }
+        for item in self._prefer_distinct_equipment_categories(ordered):
+            category = get_equipment_category(item.equipment_type.value)
+            if category not in seen_categories:
+                add(item)
+                seen_categories.add(category)
 
-        for candidate in ranked:
+        for item in self._prefer_distinct_equipment_categories(ordered):
+            add(item)
             if len(selected) >= AI_ALLOWED_EXERCISES_LIMIT:
                 break
-            category = get_equipment_category(candidate.equipment_type.value)
-            if self._shortlist_category_is_full(selected, category):
-                continue
-            add_candidates([candidate], limit=1)
 
         if len(selected) < AI_ALLOWED_EXERCISES_LIMIT:
-            add_candidates(ranked, AI_ALLOWED_EXERCISES_LIMIT - len(selected))
-        return selected[:AI_ALLOWED_EXERCISES_LIMIT]
+            for item in candidates:
+                add(item)
+                if len(selected) >= AI_ALLOWED_EXERCISES_LIMIT:
+                    break
+
+        return selected
+
+    def _repair_ai_workout_result(
+        self,
+        result: AIWorkoutGenerationResult,
+        context: AIWorkoutGenerationContext,
+    ) -> AIWorkoutGenerationResult:
+        allowed_by_slug = {item.slug: item for item in context.allowed_exercises}
+        used_slugs: set[str] = set()
+        repaired: list[AIWorkoutExerciseResult] = []
+
+        for exercise in result.exercises:
+            allowed = allowed_by_slug.get(exercise.exercise_slug)
+            if allowed is None:
+                repaired.append(exercise)
+                continue
+            if exercise.exercise_slug in used_slugs:
+                continue
+            used_slugs.add(exercise.exercise_slug)
+            repaired.append(self._repair_ai_exercise_prescription(exercise, allowed))
+
+        selected_patterns = {
+            (
+                allowed_by_slug[item.exercise_slug].movement_pattern
+                or allowed_by_slug[item.exercise_slug].movement_type
+                or ""
+            )
+            .strip()
+            .lower()
+            for item in repaired
+            if item.exercise_slug in allowed_by_slug
+        }
+        missing_patterns = [
+            pattern
+            for pattern in context.movement_pattern_requirements
+            if pattern not in selected_patterns
+        ]
+        for pattern in missing_patterns:
+            candidate = next(
+                (
+                    item
+                    for item in context.allowed_exercises
+                    if item.slug not in used_slugs
+                    and (
+                        (item.movement_pattern or item.movement_type or "")
+                        .strip()
+                        .lower()
+                        == pattern
+                    )
+                ),
+                None,
+            )
+            if candidate is None:
+                continue
+            replacement = AIWorkoutExerciseResult(
+                exercise_slug=candidate.slug,
+                sets=3,
+                reps="8-12",
+                rest_seconds=self._default_ai_rest_seconds(candidate),
+                rpe=min(7, self._max_ai_rpe(context)),
+                target_weight=None,
+                notes="Added to satisfy the required movement pattern.",
+            )
+            if len(repaired) < context.target_exercise_count_max:
+                repaired.append(replacement)
+            else:
+                replace_index = self._optional_ai_exercise_index(
+                    repaired,
+                    allowed_by_slug,
+                    set(context.movement_pattern_requirements),
+                )
+                if replace_index is not None:
+                    used_slugs.discard(repaired[replace_index].exercise_slug)
+                    repaired[replace_index] = replacement
+                else:
+                    continue
+            used_slugs.add(candidate.slug)
+
+        repaired = sorted(
+            repaired,
+            key=lambda item: (
+                self.ai_safety_validator._order_bucket(allowed_by_slug[item.exercise_slug])
+                if item.exercise_slug in allowed_by_slug
+                else 99
+            ),
+        )
+        return AIWorkoutGenerationResult(
+            workout_title=result.workout_title,
+            training_decision=result.training_decision,
+            estimated_duration_minutes=result.estimated_duration_minutes,
+            exercises=repaired,
+            reasoning_summary=result.reasoning_summary,
+            safety_note=result.safety_note,
+            provider=result.provider,
+        )
+
+    def _repair_ai_exercise_prescription(
+        self, exercise: AIWorkoutExerciseResult, allowed: AIAllowedExercise
+    ) -> AIWorkoutExerciseResult:
+        rest_seconds = exercise.rest_seconds
+        if rest_seconds == 0 and not self.ai_safety_validator._allows_zero_rest(allowed):
+            rest_seconds = self._default_ai_rest_seconds(allowed)
+        return AIWorkoutExerciseResult(
+            exercise_slug=exercise.exercise_slug,
+            sets=exercise.sets,
+            reps=exercise.reps,
+            rest_seconds=rest_seconds,
+            rpe=exercise.rpe,
+            target_weight=exercise.target_weight,
+            notes=exercise.notes,
+        )
+
+    def _optional_ai_exercise_index(
+        self,
+        exercises: list[AIWorkoutExerciseResult],
+        allowed_by_slug: dict[str, AIAllowedExercise],
+        required_patterns: set[str],
+    ) -> int | None:
+        for index in range(len(exercises) - 1, -1, -1):
+            allowed = allowed_by_slug.get(exercises[index].exercise_slug)
+            if allowed is None:
+                continue
+            pattern = (
+                allowed.movement_pattern or allowed.movement_type or ""
+            ).strip().lower()
+            if pattern not in required_patterns:
+                return index
+        return None
+
+    def _default_ai_rest_seconds(self, exercise: AIAllowedExercise) -> int:
+        role = (exercise.exercise_role or "").strip().lower()
+        pattern = (exercise.movement_pattern or exercise.movement_type or "").lower()
+        if pattern in {"cardio", "mobility"}:
+            return 0
+        if role in {"main_compound", "primary", "primary_compound"}:
+            return 90
+        return 60
+
+    def _max_ai_rpe(self, context: AIWorkoutGenerationContext) -> int:
+        if context.readiness_score < 20:
+            return 3
+        if context.readiness_score < 40 or context.training_style == "returning":
+            return 7
+        return 8
+
+    def _candidate_priority(
+        self, exercise: Exercise, required_patterns: list[str]
+    ) -> tuple[int, int, int]:
+        pattern = self._exercise_movement_pattern(exercise)
+        role = (exercise.exercise_role or "").strip().lower()
+        equipment_category = get_equipment_category(exercise.equipment_type.value)
+        pattern_rank = (
+            required_patterns.index(pattern) if pattern in required_patterns else 99
+        )
+        role_rank = {
+            "main_compound": 0,
+            "primary": 0,
+            "secondary_compound": 1,
+            "compound": 1,
+            "accessory": 2,
+            "isolation": 3,
+            "core": 4,
+            "cardio": 5,
+            "mobility": 6,
+        }.get(role, 7)
+        equipment_rank = {
+            "free_weight": 0,
+            "machine": 1,
+            "cable": 2,
+            "bodyweight": 3,
+            "cardio": 4,
+            "other": 5,
+        }.get(equipment_category, 5)
+        return (pattern_rank, role_rank, equipment_rank)
 
     def _focus_muscles(self, focus_muscle: str | None, workout_split: str) -> set[str]:
         focus = (focus_muscle or workout_split or "full_body").lower()
@@ -1054,15 +1273,17 @@ class GenerateWorkoutUseCase:
         error_message: str | None = None,
         fallback_used: bool = False,
         latency_ms: int | None = None,
+        provider: str | None = None,
     ) -> AIRequestLog:
         settings = get_settings()
+        actual_provider = provider or settings.AI_PROVIDER
         return AIRequestLog(
             id=request_id,
             user_id=command.user_id,
             workout_plan_id=None,
             request_type="generate_workout",
-            provider=settings.AI_PROVIDER,
-            model_name=settings.OPENROUTER_MODEL,
+            provider=actual_provider,
+            model_name=settings.OPENROUTER_MODEL if actual_provider == "openrouter" else settings.OLLAMA_MODEL,
             generation_mode=command.generation_mode,
             input_payload=input_payload,
             output_payload=output_payload or {},

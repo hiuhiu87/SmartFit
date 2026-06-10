@@ -341,7 +341,7 @@ async def test_generate_workout_gemini_mode_success_with_fake_client(
 
 
 @pytest.mark.asyncio
-async def test_ai_missing_required_movement_pattern_falls_back_in_auto_mode(
+async def test_ai_missing_required_movement_pattern_is_repaired_in_auto_mode(
     gemini_test_context,
 ) -> None:
     container.gemini_workout_generator_impl = FakeGeminiGenerator(
@@ -370,7 +370,9 @@ async def test_ai_missing_required_movement_pattern_falls_back_in_auto_mode(
         )
 
     assert response.status_code == 200
-    assert response.json()["data"]["source"] == "fallback"
+    payload = response.json()["data"]
+    assert payload["source"] == "ai"
+    assert len(payload["exercises"]) >= 2
 
 
 @pytest.mark.asyncio

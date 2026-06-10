@@ -23,11 +23,17 @@ class AIWorkoutSafetyValidator:
         result: AIWorkoutGenerationResult,
         context: AIWorkoutGenerationContext,
     ) -> None:
+        import re
+        def clean(s: str) -> str:
+            val = s.lower().replace("_", "-").replace(" ", "-").strip("-")
+            return re.sub(r'^exdb-\d+-', '', val)
+
+        allowed_by_clean_slug = {clean(item.slug): item for item in context.allowed_exercises}
         allowed_by_slug = {item.slug: item for item in context.allowed_exercises}
         avoid_normalized = {
             item.strip().lower() for item in context.avoid_exercises if item.strip()
         }
-        available_equipment = set(context.equipment) | {"bodyweight"}
+        available_equipment = set(context.equipment)
 
         if result.estimated_duration_minutes > context.available_time_minutes + 10:
             raise AIUnsafeOutputError("AI workout exceeds allowed duration window.")
@@ -45,6 +51,17 @@ class AIWorkoutSafetyValidator:
         selected_allowed = []
         for exercise in result.exercises:
             allowed = allowed_by_slug.get(exercise.exercise_slug)
+            if allowed is None:
+                clean_ai_slug = clean(exercise.exercise_slug)
+                allowed = allowed_by_clean_slug.get(clean_ai_slug)
+
+            if allowed is None:
+                clean_ai_slug = clean(exercise.exercise_slug)
+                for clean_db_slug, candidate in allowed_by_clean_slug.items():
+                    if clean_ai_slug in clean_db_slug or clean_db_slug in clean_ai_slug:
+                        allowed = candidate
+                        break
+
             if allowed is None:
                 raise AIExerciseMappingError(
                     f"Unknown exercise slug from AI: {exercise.exercise_slug}"
@@ -195,13 +212,29 @@ class AIWorkoutSafetyValidator:
     def _conflicts_with_limitations(
         self, exercise, context: AIWorkoutGenerationContext
     ) -> bool:
+        return self.exercise_conflicts_with_limitations(
+            exercise=exercise,
+            injuries=context.injuries,
+            movement_limitations=context.movement_limitations,
+            pain_areas=context.pain_areas,
+            pain_movements=context.pain_movements,
+        )
+
+    def exercise_conflicts_with_limitations(
+        self,
+        exercise,
+        injuries: list[str] | None = None,
+        movement_limitations: list[str] | None = None,
+        pain_areas: list[str] | None = None,
+        pain_movements: list[str] | None = None,
+    ) -> bool:
         limitations = " ".join(
             item.lower()
             for item in [
-                *context.injuries,
-                *context.movement_limitations,
-                *context.pain_areas,
-                *context.pain_movements,
+                *(injuries or []),
+                *(movement_limitations or []),
+                *(pain_areas or []),
+                *(pain_movements or []),
             ]
         )
         pattern = (

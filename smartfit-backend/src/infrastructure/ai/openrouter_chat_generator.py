@@ -74,7 +74,9 @@ class OpenRouterAIChatGenerator(AIWorkoutGeneratorPort):
                 "OpenRouter chat returned invalid JSON."
             ) from exc
 
-        return self.schema_validator.validate(raw_payload)
+        result = self.schema_validator.validate(raw_payload)
+        result.provider = "openrouter"
+        return result
 
     async def _generate_content(self, prompt: str) -> str:
         settings = get_settings()
