@@ -33,9 +33,29 @@ class ProgramWorkoutGenerator:
                 generation_mode=generation_mode,
                 goal_override=goal,
                 training_style_override=training_style,
+                user_note=self._program_workout_note(template),
+                allow_missing_readiness=True,
             )
         )
         await self.program_repository.link_workout_plan_to_instance(
             instance.id, result.workout_id, result.training_decision
         )
         return result
+
+    def _program_workout_note(self, template: ProgramWorkoutTemplate) -> str:
+        slot_lines = [
+            (
+                f"{slot.slot_order}. {slot.slot_type}: patterns={','.join(slot.movement_patterns)}; "
+                f"muscles={','.join(slot.primary_muscles)}; sets={slot.base_sets}; "
+                f"reps={slot.base_reps}; rest={slot.base_rest_seconds}s; rpe={slot.base_rpe}"
+            )
+            for slot in template.slots
+        ]
+        return (
+            "This workout belongs to a structured multi-week training program. "
+            "Follow the day intent and slot blueprint closely. "
+            f"Program day title: {template.title}. "
+            f"Program focus: {template.focus_type}. "
+            f"Workout type: {template.workout_type}. "
+            "Slot blueprint: " + " | ".join(slot_lines)
+        )

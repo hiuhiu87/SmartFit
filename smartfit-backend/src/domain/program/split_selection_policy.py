@@ -23,11 +23,15 @@ class SplitSelectionPolicy:
             ]
         elif days_per_week == 5:
             return [
-                ("Push", "upper_body_push", "push"),
-                ("Pull", "upper_body_pull", "pull"),
-                ("Legs", "lower_body", "lower_body"),
-                ("Upper Accessories", "upper_body", "upper_body"),
-                ("Lower + Conditioning", "lower_body", "lower_body"),
+                ("Upper Body Push Focus", "upper_push_focus", "push"),
+                (
+                    "Lower Body Posterior Chain + Core",
+                    "lower_posterior_core",
+                    "lower_body",
+                ),
+                ("Upper Body Pull Focus", "upper_pull_focus", "pull"),
+                ("Lower Body Quad Focus", "lower_quad_core", "lower_body"),
+                ("Arms & Shoulders Hypertrophy", "upper_arms_shoulders", "upper_body"),
             ]
         elif days_per_week == 6:
             if style == "returning":

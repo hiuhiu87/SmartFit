@@ -14,6 +14,7 @@ class CreateProgramCommand:
     training_style: str = "balanced"
     focus_areas: list[str] = field(default_factory=list)
     generation_mode: str = "auto"
+    generation_strategy: str = "full_program"
     start_date: date | None = None
 
 

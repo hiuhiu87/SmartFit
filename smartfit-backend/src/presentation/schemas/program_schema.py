@@ -32,6 +32,7 @@ class CreateProgramRequestSchema(ProgramSchema):
     generation_mode: Literal["auto", "openrouter", "gemini", "rule_based"] = (
         "rule_based"
     )
+    generation_strategy: Literal["structure_only", "full_program"] = "full_program"
     start_date: date | None = None
 
 
@@ -61,6 +62,19 @@ class ProgramTemplateResponseSchema(ProgramSchema):
     slots: list[ProgramSlotResponseSchema] = Field(default_factory=list)
 
 
+class ProgramPhaseResponseSchema(ProgramSchema):
+    id: UUID
+    name: str
+    phase_type: str
+    start_week: int
+    end_week: int
+    volume_multiplier: float
+    intensity_multiplier: float
+    rpe_modifier: int
+    is_deload: bool
+    notes: str | None = None
+
+
 class TrainingProgramResponseSchema(ProgramSchema):
     id: UUID
     name: str
@@ -78,19 +92,53 @@ class TrainingProgramResponseSchema(ProgramSchema):
     current_day_index: int
     generation_mode: str
     focus_areas: list[str]
+    generation_strategy: str = "full_program"
+    current_phase: str | None = None
+    total_scheduled_workouts: int = 0
+    completed_workouts_count: int = 0
     weekly_structure: list[ProgramTemplateResponseSchema] = Field(default_factory=list)
+    phases: list[ProgramPhaseResponseSchema] = Field(default_factory=list)
+
+
+class ScheduledWorkoutSchema(ProgramSchema):
+    instance_id: UUID
+    title: str
+    focus_type: str
+    status: str
+    planned_workout_plan_id: UUID | None = None
+
+
+class RecommendationSchema(ProgramSchema):
+    action: str
+    readiness_adjustment: str
+    message: str
 
 
 class TodayProgramWorkoutResponseSchema(ProgramSchema):
     program_id: UUID
-    scheduled: bool
-    recommendation: str
     week_number: int | None = None
+    phase: str | None = None
+    scheduled_workout: ScheduledWorkoutSchema | None = None
+    recommendation: RecommendationSchema | str | None = None
+
+    # Backward compatibility
+    scheduled: bool | None = None
     day_index: int | None = None
     instance_id: UUID | None = None
     template: ProgramTemplateResponseSchema | None = None
     status: str | None = None
     workout_plan_id: UUID | None = None
+
+
+class ProgramCalendarDayResponseSchema(ProgramSchema):
+    date: date
+    week_number: int
+    day_index: int
+    title: str
+    focus_type: str
+    status: str
+    workout_plan_id: UUID | None
+    planned_workout_plan_id: UUID | None = None
 
 
 class RescheduleProgramWorkoutRequestSchema(ProgramSchema):

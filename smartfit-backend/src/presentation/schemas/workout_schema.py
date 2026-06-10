@@ -132,6 +132,8 @@ class CompleteWorkoutRequestSchema(BaseModel):
     duration_minutes: int | None = Field(default=None, ge=1, le=300)
     calories_burned: float | None = Field(default=None, ge=0)
     avg_heart_rate: float | None = Field(default=None, ge=0)
+    max_heart_rate: float | None = Field(default=None, ge=0)
+    min_heart_rate: float | None = Field(default=None, ge=0)
     difficulty_feedback: str | None = None
     energy_after: int | None = Field(default=None, ge=0, le=10)
     notes: str | None = Field(default=None, max_length=2000)

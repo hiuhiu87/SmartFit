@@ -46,6 +46,8 @@ from src.domain.common.enums import (
     DifficultyFeedback,
     EquipmentType,
     MuscleGroup,
+    ReadinessCategory,
+    ReadinessRecommendation,
     WorkoutDecision,
     WorkoutStatus,
 )
@@ -84,6 +86,18 @@ from src.infrastructure.ai.safety_validator import AIWorkoutSafetyValidator
 
 logger = logging.getLogger(__name__)
 AI_ALLOWED_EXERCISES_LIMIT = 16
+
+
+class _ReadinessSnapshot:
+    def __init__(
+        self,
+        score: float = 75.0,
+        category: ReadinessCategory = ReadinessCategory.GOOD,
+        recommendation: ReadinessRecommendation = ReadinessRecommendation.TRAIN_NORMAL,
+    ) -> None:
+        self.score = score
+        self.category = category
+        self.recommendation = recommendation
 
 
 class GenerateWorkoutUseCase:
@@ -125,7 +139,10 @@ class GenerateWorkoutUseCase:
             command.user_id, command.target_date
         )
         if readiness is None:
-            raise NotFoundError("Readiness score not found.")
+            if command.allow_missing_readiness:
+                readiness = _ReadinessSnapshot()
+            else:
+                raise NotFoundError("Readiness score not found.")
 
         equipment = command.equipment or [
             item.equipment_type.value
@@ -711,12 +728,37 @@ class GenerateWorkoutUseCase:
         self, focus_muscle: str | None, workout_split: str
     ) -> list[str]:
         focus = (focus_muscle or workout_split or "full_body").lower()
-        if focus in {"upper_body_pull", "pull", "back", "upper_pull_posture"}:
+        if focus in {
+            "upper_body_pull",
+            "pull",
+            "back",
+            "upper_pull_posture",
+            "upper_pull_focus",
+        }:
             return ["horizontal_pull", "vertical_pull"]
-        if focus in {"upper_body_push", "push", "chest", "upper_push_balanced"}:
+        if focus in {
+            "upper_body_push",
+            "push",
+            "chest",
+            "upper_push_balanced",
+            "upper_push_focus",
+        }:
             return ["horizontal_push", "vertical_push"]
-        if focus in {"lower_body", "legs", "lower_core"}:
+        if focus in {
+            "lower_body",
+            "legs",
+            "lower_core",
+            "lower_posterior_core",
+            "lower_quad_core",
+        }:
             return ["squat", "hinge"]
+        if focus == "upper_arms_shoulders":
+            return [
+                "vertical_pull",
+                "vertical_push",
+                "elbow_flexion",
+                "elbow_extension",
+            ]
         if focus in {"full_body", "full_body_conditioning"}:
             return ["squat", "hinge", "horizontal_push", "horizontal_pull"]
         if focus == "upper_body":
@@ -913,12 +955,32 @@ class GenerateWorkoutUseCase:
 
     def _focus_muscles(self, focus_muscle: str | None, workout_split: str) -> set[str]:
         focus = (focus_muscle or workout_split or "full_body").lower()
-        if focus in {"upper_body_push", "upper_push_balanced", "push", "chest"}:
+        if focus in {
+            "upper_body_push",
+            "upper_push_balanced",
+            "upper_push_focus",
+            "push",
+            "chest",
+        }:
             return {"chest", "shoulders"}
-        if focus in {"upper_body_pull", "upper_pull_posture", "pull", "back"}:
+        if focus in {
+            "upper_body_pull",
+            "upper_pull_posture",
+            "upper_pull_focus",
+            "pull",
+            "back",
+        }:
             return {"back", "shoulders"}
-        if focus in {"lower_body", "lower_core", "legs"}:
+        if focus in {
+            "lower_body",
+            "lower_core",
+            "lower_posterior_core",
+            "lower_quad_core",
+            "legs",
+        }:
             return {"legs", "core"}
+        if focus == "upper_arms_shoulders":
+            return {"back", "shoulders", "arms"}
         if focus == "upper_body":
             return {"chest", "back", "shoulders", "arms"}
         return {"chest", "back", "shoulders", "legs", "core", "full_body"}
@@ -1409,6 +1471,8 @@ class CompleteWorkoutUseCase:
         log.total_volume = total_volume
         log.calories_burned = command.calories_burned
         log.avg_heart_rate = command.avg_heart_rate
+        log.max_heart_rate = command.max_heart_rate
+        log.min_heart_rate = command.min_heart_rate
         log.notes = command.notes
         log = await self.workout_repository.complete_workout_log(log)
 

@@ -32,6 +32,20 @@ class ProgramTemplateDTO:
 
 
 @dataclass(slots=True)
+class ProgramPhaseDTO:
+    id: UUID
+    name: str
+    phase_type: str
+    start_week: int
+    end_week: int
+    volume_multiplier: float
+    intensity_multiplier: float
+    rpe_modifier: int
+    is_deload: bool
+    notes: str | None = None
+
+
+@dataclass(slots=True)
 class TrainingProgramDTO:
     id: UUID
     name: str
@@ -49,7 +63,12 @@ class TrainingProgramDTO:
     current_day_index: int
     generation_mode: str
     focus_areas: list[str]
+    generation_strategy: str = "full_program"
+    current_phase: str | None = None
+    total_scheduled_workouts: int = 0
+    completed_workouts_count: int = 0
     weekly_structure: list[ProgramTemplateDTO] = field(default_factory=list)
+    phases: list[ProgramPhaseDTO] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -63,3 +82,14 @@ class TodayProgramWorkoutDTO:
     template: ProgramTemplateDTO | None = None
     status: str | None = None
     workout_plan_id: UUID | None = None
+
+
+@dataclass(slots=True)
+class ProgramCalendarDayDTO:
+    date: date
+    week_number: int
+    day_index: int
+    title: str
+    focus_type: str
+    status: str
+    workout_plan_id: UUID | None

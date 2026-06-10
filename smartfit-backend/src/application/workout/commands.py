@@ -17,6 +17,7 @@ class GenerateWorkoutCommand:
     user_note: str | None = None
     goal_override: str | None = None
     training_style_override: str | None = None
+    allow_missing_readiness: bool = False
 
 
 @dataclass(slots=True)
@@ -71,6 +72,8 @@ class CompleteWorkoutCommand:
     duration_minutes: int | None = None
     calories_burned: float | None = None
     avg_heart_rate: float | None = None
+    max_heart_rate: float | None = None
+    min_heart_rate: float | None = None
     difficulty_feedback: str | None = None
     energy_after: int | None = None
     notes: str | None = None

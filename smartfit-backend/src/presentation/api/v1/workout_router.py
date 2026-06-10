@@ -290,6 +290,8 @@ async def complete_workout(
             duration_minutes=payload.duration_minutes,
             calories_burned=payload.calories_burned,
             avg_heart_rate=payload.avg_heart_rate,
+            max_heart_rate=payload.max_heart_rate,
+            min_heart_rate=payload.min_heart_rate,
             difficulty_feedback=payload.difficulty_feedback,
             energy_after=payload.energy_after,
             notes=payload.notes,

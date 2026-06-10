@@ -61,6 +61,9 @@ class ProgramRepository(ABC):
         instance_id: UUID,
         workout_plan_id: UUID,
         readiness_adjustment: str | None,
+        planned_workout_plan_id: UUID | None = None,
+        adjusted_workout_plan_id: UUID | None = None,
+        adjustment_reason: str | None = None,
     ) -> ProgramWorkoutInstance:
         raise NotImplementedError
 

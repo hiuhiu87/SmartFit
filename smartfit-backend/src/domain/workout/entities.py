@@ -97,6 +97,8 @@ class WorkoutLog:
     total_volume: float = 0
     calories_burned: float | None = None
     avg_heart_rate: float | None = None
+    max_heart_rate: float | None = None
+    min_heart_rate: float | None = None
     notes: str | None = None
     sets: list[WorkoutSetLog] = field(default_factory=list)
     created_at: datetime | None = None

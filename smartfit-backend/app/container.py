@@ -2,6 +2,8 @@ from src.application.ai.use_cases import AIChatUseCase, GetAIChatHistoryUseCase
 from src.application.ai_usage.use_cases import AIUsageService, GetAIUsageTodayUseCase
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.settings import get_settings
+
 from src.application.auth.use_cases import (
     LoginUseCase,
     RefreshTokenUseCase,
@@ -23,6 +25,7 @@ from src.application.progress.use_cases import (
 )
 from src.application.program.generator import ProgramWorkoutGenerator
 from src.application.program.use_cases import ProgramService
+from src.application.program.full_program_generator import FullProgramGenerator
 from src.application.readiness.use_cases import (
     CalculateReadinessUseCase,
     GetReadinessHistoryUseCase,
@@ -48,6 +51,9 @@ from src.domain.ai.ports import AIWorkoutGeneratorPort
 from src.domain.ai.services import AIUsagePolicy
 from src.domain.progression.services import ProgressionService
 from src.domain.program.services import ProgramScheduler, ProgramTemplateFactory
+from src.domain.program.full_program_scheduler import FullProgramScheduler
+from src.domain.program.periodization_policy import ProgramPeriodizationPolicy
+from src.domain.program.program_workout_planner import ProgramWorkoutPlanner
 from src.domain.readiness.services import ReadinessCalculator
 from src.domain.training.services import (
     ExercisePerformanceAnalyzer,
@@ -66,6 +72,8 @@ from src.infrastructure.ai.openrouter_chat_generator import OpenRouterAIChatGene
 from src.infrastructure.ai.openrouter_workout_generator import (
     OpenRouterWorkoutGenerator,
 )
+from src.infrastructure.ai.ollama_workout_generator import OllamaWorkoutGenerator
+from src.infrastructure.ai.ollama_chat_generator import OllamaAIChatGenerator
 from src.infrastructure.ai.output_mapper import AIWorkoutOutputMapper
 from src.infrastructure.ai.safety_validator import (
     AIChatSafetyValidator,
@@ -114,6 +122,11 @@ class Container:
         self.progression_service = ProgressionService()
         self.program_template_factory = ProgramTemplateFactory()
         self.program_scheduler = ProgramScheduler()
+        self.full_program_scheduler = FullProgramScheduler()
+        self.periodization_policy = ProgramPeriodizationPolicy()
+        self.workout_planner = ProgramWorkoutPlanner(
+            progression_service=self.progression_service
+        )
         self.workout_generator = RuleBasedWorkoutGenerator(
             progression_service=self.progression_service
         )
@@ -215,14 +228,34 @@ class Container:
 
     def program_service(self, session: AsyncSession) -> ProgramService:
         repository = self.get_program_repository(session)
+        generate_workout_use_case = self.generate_workout_use_case(session)
+        full_generator = FullProgramGenerator(
+            program_repository=repository,
+            user_repository=self.get_user_repository(session),
+            exercise_repository=self.get_exercise_repository(session),
+            workout_repository=self.get_workout_repository(session),
+            progression_repository=self.get_progression_repository(session),
+            template_factory=self.program_template_factory,
+            scheduler=self.full_program_scheduler,
+            periodization_policy=self.periodization_policy,
+            workout_planner=self.workout_planner,
+            workout_generation_use_case=generate_workout_use_case,
+        )
         return ProgramService(
             repository=repository,
             user_repository=self.get_user_repository(session),
             template_factory=self.program_template_factory,
-            scheduler=self.program_scheduler,
+            scheduler=self.full_program_scheduler,
             workout_generator=ProgramWorkoutGenerator(
-                self.generate_workout_use_case(session), repository
+                generate_workout_use_case, repository
             ),
+            full_generator=full_generator,
+            workout_repository=self.get_workout_repository(session),
+            readiness_repository=self.get_readiness_repository(session),
+            exercise_repository=self.get_exercise_repository(session),
+            progression_repository=self.get_progression_repository(session),
+            periodization_policy=self.periodization_policy,
+            workout_planner=self.workout_planner,
         )
 
     def get_progression_repository(
@@ -338,6 +371,12 @@ class Container:
         return self.ai_workout_output_mapper
 
     def get_gemini_workout_generator(self) -> AIWorkoutGeneratorPort:
+        settings = get_settings()
+        if settings.AI_PROVIDER == "ollama":
+            return OllamaWorkoutGenerator(
+                self.gemini_prompt_builder,
+                self.ai_workout_schema_validator,
+            )
         return self.gemini_workout_generator_impl
 
     def get_gemini_chat_prompt_builder(self) -> GeminiChatPromptBuilder:
@@ -350,6 +389,12 @@ class Container:
         return self.ai_chat_safety_validator
 
     def get_gemini_ai_chat_generator(self) -> AIWorkoutGeneratorPort:
+        settings = get_settings()
+        if settings.AI_PROVIDER == "ollama":
+            return OllamaAIChatGenerator(
+                self.gemini_chat_prompt_builder,
+                self.ai_chat_schema_validator,
+            )
         return self.gemini_ai_chat_generator_impl
 
     def get_workout_detail_use_case(

@@ -29,9 +29,37 @@ class TrainingProgramModel(SQLModel, table=True):
     current_week: int = 1
     current_day_index: int = 0
     generation_mode: str = Field(default="rule_based", max_length=50)
+    generation_strategy: str = Field(default="full_program", max_length=50)
+    current_phase: str | None = Field(default=None, max_length=50)
+    total_scheduled_workouts: int = Field(default=0)
+    completed_workouts_count: int = Field(default=0)
     focus_areas: list[str] = Field(
         default_factory=list, sa_column=Column(PORTABLE_JSON, nullable=False)
     )
+    created_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
+class ProgramPhaseModel(SQLModel, table=True):
+    __tablename__ = "program_phases"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    program_id: UUID = Field(foreign_key="training_programs.id", index=True)
+    name: str = Field(max_length=255)
+    phase_type: str = Field(max_length=50)
+    start_week: int
+    end_week: int
+    volume_multiplier: float
+    intensity_multiplier: float
+    rpe_modifier: int
+    is_deload: bool = False
+    notes: str | None = Field(default=None, max_length=1000)
     created_at: datetime = Field(
         default_factory=utcnow,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -113,11 +141,24 @@ class ProgramWorkoutInstanceModel(SQLModel, table=True):
     scheduled_date: date = Field(sa_column=Column(Date, nullable=False, index=True))
     week_number: int
     day_index: int
+    planned_workout_plan_id: UUID | None = Field(
+        default=None, foreign_key="workout_plans.id", index=True
+    )
     actual_workout_plan_id: UUID | None = Field(
+        default=None, foreign_key="workout_plans.id", index=True
+    )
+    adjusted_workout_plan_id: UUID | None = Field(
         default=None, foreign_key="workout_plans.id", index=True
     )
     status: str = Field(index=True, max_length=50)
     readiness_adjustment: str | None = Field(default=None, max_length=50)
+    adjustment_reason: str | None = Field(default=None, max_length=255)
+    original_scheduled_date: date | None = Field(
+        default=None, sa_column=Column(Date, nullable=True)
+    )
+    completed_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     created_at: datetime = Field(
         default_factory=utcnow,
         sa_column=Column(DateTime(timezone=True), nullable=False),

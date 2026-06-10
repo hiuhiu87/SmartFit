@@ -3,14 +3,6 @@ from src.domain.ai.entities import AIWorkoutGenerationContext
 
 class GeminiPromptBuilder:
     def build_generate_workout_prompt(self, context: AIWorkoutGenerationContext) -> str:
-        allowed_lines = "\n".join(
-            [
-                f"- {item.slug} | {item.name} | {item.primary_muscle} | "
-                f"{item.equipment} | {item.difficulty} | {item.movement_type or 'general'}"
-                for item in context.allowed_exercises
-            ]
-        )
-
         # Format progression suggestions
         progression_lines = "none"
         if context.progression_context:
@@ -71,7 +63,6 @@ class GeminiPromptBuilder:
 
         return (
             "Return JSON only. No markdown. No comments. No extra text.\n"
-            "Use only exercise_slug values from allowed_exercises.\n"
             "Do not invent exercises. Respect readiness, equipment, time, avoid list, and level.\n\n"
             "Do not invent previous performance. If progression data is absent, leave weight unspecified.\n"
             "Do not select any exercise that conflicts with injuries, pain, or movement limitations.\n\n"
@@ -104,7 +95,6 @@ class GeminiPromptBuilder:
             f"score: {context.readiness_score}\n"
             f"category: {context.readiness_category}\n"
             f"recommendation: {context.readiness_recommendation}\n\n"
-            f"Allowed exercises:\n{allowed_lines}\n\n"
             f"Progression Suggestions per exercise:\n{progression_lines}\n\n"
             "Return JSON schema:\n"
             "{\n"

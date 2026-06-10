@@ -22,6 +22,11 @@ class AIGenerationError(DomainError):
     """Raised when AI generation fails."""
 
 
+class AIPaymentRequiredError(AIGenerationError):
+    """Raised when AI provider returns 402 Payment Required."""
+
+
+
 class AIRateLimitError(AIGenerationError):
     """Raised when AI provider rate limit is hit."""
 

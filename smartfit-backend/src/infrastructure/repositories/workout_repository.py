@@ -255,6 +255,8 @@ class SQLModelWorkoutRepository(WorkoutRepository):
         model.total_volume = workout_log.total_volume
         model.calories_burned = workout_log.calories_burned
         model.avg_heart_rate = workout_log.avg_heart_rate
+        model.max_heart_rate = workout_log.max_heart_rate
+        model.min_heart_rate = workout_log.min_heart_rate
         model.notes = workout_log.notes
         model.updated_at = datetime.now(timezone.utc)
         await self.session.flush()

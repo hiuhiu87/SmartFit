@@ -13,6 +13,7 @@ from src.infrastructure.database.models.health_model import (
     ManualCheckinModel,
 )
 from src.infrastructure.database.models.program_model import (
+    ProgramPhaseModel,
     ProgramTemplateSlotModel,
     ProgramWorkoutInstanceModel,
     ProgramWorkoutTemplateModel,
@@ -45,6 +46,7 @@ __all__ = [
     "HealthSummaryModel",
     "ManualCheckinModel",
     "NotificationSettingModel",
+    "ProgramPhaseModel",
     "ProgramTemplateSlotModel",
     "ProgramWorkoutInstanceModel",
     "ProgramWorkoutTemplateModel",

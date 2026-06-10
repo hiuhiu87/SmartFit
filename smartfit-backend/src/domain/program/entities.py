@@ -27,6 +27,37 @@ class PreferredSplit(StrEnum):
     CUSTOM = "custom"
 
 
+class ProgramGenerationStrategy(StrEnum):
+    STRUCTURE_ONLY = "structure_only"
+    FULL_PROGRAM = "full_program"
+
+
+class ProgramAdjustmentType(StrEnum):
+    REDUCED_VOLUME = "reduced_volume"
+    RECOVERY_SUBSTITUTION = "recovery_substitution"
+    RESCHEDULED = "rescheduled"
+    SKIPPED = "skipped"
+    EXERCISE_REPLACEMENT = "exercise_replacement"
+    DELOAD = "deload"
+
+
+@dataclass(slots=True)
+class ProgramPhase:
+    id: UUID
+    program_id: UUID
+    name: str
+    phase_type: str  # foundation, accumulation, intensification, deload, consolidation
+    start_week: int
+    end_week: int
+    volume_multiplier: float
+    intensity_multiplier: float
+    rpe_modifier: int
+    is_deload: bool
+    notes: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 @dataclass(slots=True)
 class ProgramTemplateSlot:
     id: UUID
@@ -58,6 +89,45 @@ class ProgramWorkoutTemplate:
 
 
 @dataclass(slots=True)
+class ProgramWorkoutInstance:
+    id: UUID
+    program_id: UUID
+    program_workout_template_id: UUID
+    user_id: UUID
+    scheduled_date: date
+    week_number: int
+    day_index: int
+    planned_workout_plan_id: UUID | None
+    actual_workout_plan_id: UUID | None
+    adjusted_workout_plan_id: UUID | None = None
+    status: ProgramWorkoutStatus = ProgramWorkoutStatus.SCHEDULED
+    readiness_adjustment: str | None = None
+    adjustment_reason: str | None = None
+    original_scheduled_date: date | None = None
+    completed_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class ProgramWeek:
+    week_number: int
+    phase: ProgramPhase | str
+    scheduled_workouts: list[ProgramWorkoutInstance] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ProgramCalendarDay:
+    date: date
+    week_number: int
+    day_index: int
+    title: str
+    focus_type: str
+    status: str
+    workout_plan_id: UUID | None
+
+
+@dataclass(slots=True)
 class TrainingProgram:
     id: UUID
     user_id: UUID
@@ -75,23 +145,13 @@ class TrainingProgram:
     current_day_index: int = 0
     training_style: str = "balanced"
     generation_mode: str = "rule_based"
+    generation_strategy: ProgramGenerationStrategy = ProgramGenerationStrategy.FULL_PROGRAM
+    current_phase: str | None = None
+    total_scheduled_workouts: int = 0
+    completed_workouts_count: int = 0
     focus_areas: list[str] = field(default_factory=list)
     templates: list[ProgramWorkoutTemplate] = field(default_factory=list)
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-@dataclass(slots=True)
-class ProgramWorkoutInstance:
-    id: UUID
-    program_id: UUID
-    program_workout_template_id: UUID
-    user_id: UUID
-    scheduled_date: date
-    week_number: int
-    day_index: int
-    actual_workout_plan_id: UUID | None
-    status: ProgramWorkoutStatus
-    readiness_adjustment: str | None = None
+    phases: list[ProgramPhase] = field(default_factory=list)
+    instances: list[ProgramWorkoutInstance] = field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None

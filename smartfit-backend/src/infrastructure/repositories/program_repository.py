@@ -12,6 +12,8 @@ from src.domain.program.entities import (
     ProgramWorkoutStatus,
     ProgramWorkoutTemplate,
     TrainingProgram,
+    ProgramPhase,
+    ProgramGenerationStrategy,
 )
 from src.domain.program.repositories import ProgramRepository
 from src.infrastructure.database.models.program_model import (
@@ -19,6 +21,7 @@ from src.infrastructure.database.models.program_model import (
     ProgramWorkoutInstanceModel,
     ProgramWorkoutTemplateModel,
     TrainingProgramModel,
+    ProgramPhaseModel,
 )
 
 
@@ -55,12 +58,39 @@ class SQLModelProgramRepository(ProgramRepository):
             current_week=program.current_week,
             current_day_index=program.current_day_index,
             generation_mode=program.generation_mode,
+            generation_strategy=program.generation_strategy.value,
+            current_phase=program.current_phase,
+            total_scheduled_workouts=program.total_scheduled_workouts,
+            completed_workouts_count=program.completed_workouts_count,
             focus_areas=program.focus_areas,
             created_at=now,
             updated_at=now,
         )
         self.session.add(model)
         await self.session.flush()
+
+        # Save phases
+        phase_models = [
+            ProgramPhaseModel(
+                id=phase.id,
+                program_id=phase.program_id,
+                name=phase.name,
+                phase_type=phase.phase_type,
+                start_week=phase.start_week,
+                end_week=phase.end_week,
+                volume_multiplier=phase.volume_multiplier,
+                intensity_multiplier=phase.intensity_multiplier,
+                rpe_modifier=phase.rpe_modifier,
+                is_deload=phase.is_deload,
+                notes=phase.notes,
+                created_at=now,
+                updated_at=now,
+            )
+            for phase in program.phases
+        ]
+        if phase_models:
+            self.session.add_all(phase_models)
+            await self.session.flush()
 
         template_models = [
             ProgramWorkoutTemplateModel(
@@ -98,6 +128,35 @@ class SQLModelProgramRepository(ProgramRepository):
                     )
                 )
         await self.session.flush()
+
+        # Save instances if present
+        instances = getattr(program, "instances", [])
+        if instances:
+            instance_models = [
+                ProgramWorkoutInstanceModel(
+                    id=inst.id,
+                    program_id=inst.program_id,
+                    program_workout_template_id=inst.program_workout_template_id,
+                    user_id=inst.user_id,
+                    scheduled_date=inst.scheduled_date,
+                    week_number=inst.week_number,
+                    day_index=inst.day_index,
+                    planned_workout_plan_id=inst.planned_workout_plan_id,
+                    actual_workout_plan_id=inst.actual_workout_plan_id,
+                    adjusted_workout_plan_id=inst.adjusted_workout_plan_id,
+                    status=inst.status.value,
+                    readiness_adjustment=inst.readiness_adjustment,
+                    adjustment_reason=inst.adjustment_reason,
+                    original_scheduled_date=inst.original_scheduled_date,
+                    completed_at=inst.completed_at,
+                    created_at=now,
+                    updated_at=now,
+                )
+                for inst in instances
+            ]
+            self.session.add_all(instance_models)
+            await self.session.flush()
+
         program.created_at = now
         program.updated_at = now
         return program
@@ -193,9 +252,14 @@ class SQLModelProgramRepository(ProgramRepository):
             scheduled_date=instance.scheduled_date,
             week_number=instance.week_number,
             day_index=instance.day_index,
+            planned_workout_plan_id=instance.planned_workout_plan_id,
             actual_workout_plan_id=instance.actual_workout_plan_id,
+            adjusted_workout_plan_id=instance.adjusted_workout_plan_id,
             status=instance.status.value,
             readiness_adjustment=instance.readiness_adjustment,
+            adjustment_reason=instance.adjustment_reason,
+            original_scheduled_date=instance.original_scheduled_date,
+            completed_at=instance.completed_at,
             created_at=now,
             updated_at=now,
         )
@@ -220,7 +284,9 @@ class SQLModelProgramRepository(ProgramRepository):
     ) -> ProgramWorkoutInstance | None:
         result = await self.session.execute(
             select(ProgramWorkoutInstanceModel).where(
-                ProgramWorkoutInstanceModel.actual_workout_plan_id == workout_plan_id
+                (ProgramWorkoutInstanceModel.actual_workout_plan_id == workout_plan_id) |
+                (ProgramWorkoutInstanceModel.planned_workout_plan_id == workout_plan_id) |
+                (ProgramWorkoutInstanceModel.adjusted_workout_plan_id == workout_plan_id)
             )
         )
         model = result.scalar_one_or_none()
@@ -231,9 +297,18 @@ class SQLModelProgramRepository(ProgramRepository):
         instance_id: UUID,
         workout_plan_id: UUID,
         readiness_adjustment: str | None,
+        planned_workout_plan_id: UUID | None = None,
+        adjusted_workout_plan_id: UUID | None = None,
+        adjustment_reason: str | None = None,
     ) -> ProgramWorkoutInstance:
         model = await self._instance_model(instance_id)
         model.actual_workout_plan_id = workout_plan_id
+        if planned_workout_plan_id is not None:
+            model.planned_workout_plan_id = planned_workout_plan_id
+        if adjusted_workout_plan_id is not None:
+            model.adjusted_workout_plan_id = adjusted_workout_plan_id
+        if adjustment_reason is not None:
+            model.adjustment_reason = adjustment_reason
         model.status = ProgramWorkoutStatus.GENERATED.value
         model.readiness_adjustment = readiness_adjustment
         model.updated_at = datetime.now(timezone.utc)
@@ -250,8 +325,22 @@ class SQLModelProgramRepository(ProgramRepository):
         model.status = status.value
         if scheduled_date is not None:
             model.scheduled_date = scheduled_date
+        if status == ProgramWorkoutStatus.COMPLETED:
+            model.completed_at = datetime.now(timezone.utc)
         model.updated_at = datetime.now(timezone.utc)
         await self.session.flush()
+
+        # Update program's completed count if program exists
+        if status == ProgramWorkoutStatus.COMPLETED:
+            prog_result = await self.session.execute(
+                select(TrainingProgramModel).where(TrainingProgramModel.id == model.program_id)
+            )
+            prog = prog_result.scalar_one_or_none()
+            if prog:
+                prog.completed_workouts_count += 1
+                prog.updated_at = datetime.now(timezone.utc)
+                await self.session.flush()
+
         return self._instance_to_domain(model)
 
     async def update_program_progress(
@@ -268,7 +357,38 @@ class SQLModelProgramRepository(ProgramRepository):
             await self.session.flush()
 
     async def _to_program(self, model: TrainingProgramModel) -> TrainingProgram:
-        return TrainingProgram(
+        # Load phases
+        phases_result = await self.session.execute(
+            select(ProgramPhaseModel)
+            .where(ProgramPhaseModel.program_id == model.id)
+            .order_by(ProgramPhaseModel.start_week)
+        )
+        phases = [
+            ProgramPhase(
+                id=p.id,
+                program_id=p.program_id,
+                name=p.name,
+                phase_type=p.phase_type,
+                start_week=p.start_week,
+                end_week=p.end_week,
+                volume_multiplier=p.volume_multiplier,
+                intensity_multiplier=p.intensity_multiplier,
+                rpe_modifier=p.rpe_modifier,
+                is_deload=p.is_deload,
+                notes=p.notes,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+            for p in phases_result.scalars().all()
+        ]
+
+        # Load instances
+        instances_result = await self.session.execute(
+            select(ProgramWorkoutInstanceModel).where(ProgramWorkoutInstanceModel.program_id == model.id)
+        )
+        instances = [self._instance_to_domain(inst) for inst in instances_result.scalars().all()]
+
+        program = TrainingProgram(
             id=model.id,
             user_id=model.user_id,
             name=model.name,
@@ -285,11 +405,18 @@ class SQLModelProgramRepository(ProgramRepository):
             current_week=model.current_week,
             current_day_index=model.current_day_index,
             generation_mode=model.generation_mode,
+            generation_strategy=ProgramGenerationStrategy(model.generation_strategy),
+            current_phase=model.current_phase,
+            total_scheduled_workouts=model.total_scheduled_workouts,
+            completed_workouts_count=model.completed_workouts_count,
             focus_areas=model.focus_areas,
             templates=await self.list_program_workout_templates(model.id),
+            phases=phases,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
+        program.instances = instances
+        return program
 
     async def _instance_model(self, instance_id: UUID) -> ProgramWorkoutInstanceModel:
         result = await self.session.execute(
@@ -330,9 +457,14 @@ class SQLModelProgramRepository(ProgramRepository):
             scheduled_date=model.scheduled_date,
             week_number=model.week_number,
             day_index=model.day_index,
+            planned_workout_plan_id=model.planned_workout_plan_id,
             actual_workout_plan_id=model.actual_workout_plan_id,
+            adjusted_workout_plan_id=model.adjusted_workout_plan_id,
             status=ProgramWorkoutStatus(model.status),
             readiness_adjustment=model.readiness_adjustment,
+            adjustment_reason=model.adjustment_reason,
+            original_scheduled_date=model.original_scheduled_date,
+            completed_at=model.completed_at,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

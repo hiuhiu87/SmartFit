@@ -110,6 +110,7 @@ class ExerciseSelectionPolicy:
             score += 10
         if category in slot.preferred_equipment_categories:
             score += 20
+        score += self._slot_intent_score(slot.slot_type, exercise, category)
         score += self.training_style_policy.score_exercise(exercise, training_style)
         score += self.diversity_policy.diversity_bonus(
             exercise,
@@ -128,11 +129,20 @@ class ExerciseSelectionPolicy:
         ):
             score += 5
 
-        allowed_group_count = (
-            2
-            if template_id == "upper_pull_emphasis" and substitution_group == "row"
-            else 1
-        )
+        allowed_group_count = 1
+        if (
+            template_id in {"upper_pull_emphasis", "upper_pull_focus"}
+            and substitution_group == "row"
+        ):
+            allowed_group_count = 2
+        if slot.slot_type in {
+            "row_variation",
+            "chest_supported_row",
+            "cable_crunch",
+            "captains_chair_leg_raise",
+            "dumbbell_lateral_raise",
+        }:
+            allowed_group_count = 2
         if group_counts[substitution_group] >= allowed_group_count:
             score -= 30
         if (
@@ -200,6 +210,16 @@ class ExerciseSelectionPolicy:
             return "elbow_extension"
         if "rear delt" in name or "face pull" in name or "lateral raise" in name:
             return "rear_delt"
+        if any(
+            term in name
+            for term in ["crunch", "leg raise", "knee raise", "russian twist", "twist"]
+        ):
+            return "core"
+        if any(
+            term in name
+            for term in ["treadmill", "bike", "cycle", "cycling", "elliptical", "rower"]
+        ):
+            return "cardio"
         if "pulldown" in name or "pull-up" in name or "chin" in name:
             return "vertical_pull"
         if "row" in name or movement == "pull":
@@ -215,6 +235,8 @@ class ExerciseSelectionPolicy:
             return "horizontal_push"
         if "lunge" in name:
             return "lunge"
+        if "calf" in name:
+            return "calf_raise"
         if "squat" in name or "leg press" in name:
             return "squat"
         if (
@@ -258,9 +280,227 @@ class ExerciseSelectionPolicy:
         movement_pattern = self._movement_pattern(exercise)
         if movement_pattern == "horizontal_pull":
             return "row"
+        if movement_pattern == "calf_raise":
+            return "calf_raise"
         if (
             movement_pattern == "cardio"
             and exercise.equipment_type.value == "treadmill"
         ):
             return "treadmill_cardio"
         return movement_pattern
+
+    def _slot_intent_score(
+        self, slot_type: str, exercise: Exercise, equipment_category: str
+    ) -> int:
+        name = exercise.name.lower()
+        slug = exercise.slug.lower()
+        text = f"{slug} {name}"
+
+        intent_terms: dict[str, list[tuple[str, int]]] = {
+            "incline_dumbbell_press": [
+                ("incline", 35),
+                ("dumbbell", 25),
+                ("press", 15),
+                ("push-up", -25),
+                ("fly", -15),
+            ],
+            "machine_chest_press": [
+                ("chest press", 35),
+                ("machine", 25),
+                ("lever", 20),
+                ("push-up", -30),
+                ("incline", -10),
+            ],
+            "seated_dumbbell_shoulder_press": [
+                ("seated", 20),
+                ("dumbbell", 20),
+                ("shoulder press", 35),
+                ("arnold", -10),
+            ],
+            "dumbbell_lateral_raise": [
+                ("lateral raise", 45),
+                ("side raise", 25),
+                ("dumbbell", 20),
+                ("rear", -20),
+                ("press", -25),
+            ],
+            "cable_triceps_pushdown": [
+                ("pushdown", 45),
+                ("rope", 25),
+                ("triceps", 25),
+                ("cable", 25),
+                ("dip", -20),
+            ],
+            "romanian_deadlift": [
+                ("romanian", 45),
+                ("rdl", 35),
+                ("deadlift", 25),
+                ("stiff", 15),
+                ("swing", -25),
+            ],
+            "goblet_squat": [
+                ("goblet", 45),
+                ("squat", 25),
+                ("dumbbell", 15),
+                ("kettlebell", 15),
+            ],
+            "dumbbell_lunge": [
+                ("dumbbell", 25),
+                ("lunge", 35),
+                ("jump", -25),
+                ("twist", -15),
+            ],
+            "cable_crunch": [
+                ("cable", 35),
+                ("crunch", 40),
+                ("plank", -30),
+                ("twist", -10),
+            ],
+            "captains_chair_leg_raise": [
+                ("captain", 45),
+                ("leg raise", 35),
+                ("knee raise", 25),
+                ("hanging", -10),
+                ("crunch", -20),
+            ],
+            "wide_lat_pulldown": [
+                ("lat pulldown", 45),
+                ("wide", 20),
+                ("pulldown", 35),
+                ("pull-up", -10),
+            ],
+            "close_grip_lat_pulldown": [
+                ("lat pulldown", 40),
+                ("close", 25),
+                ("reverse", 15),
+                ("pulldown", 30),
+            ],
+            "row_variation": [
+                ("row", 35),
+                ("barbell", 20),
+                ("dumbbell", 20),
+                ("upright", -30),
+            ],
+            "chest_supported_row": [
+                ("chest supported", 50),
+                ("incline row", 30),
+                ("row", 25),
+                ("barbell", -5),
+            ],
+            "rear_delt_fly": [
+                ("rear delt", 45),
+                ("fly", 30),
+                ("face pull", 25),
+                ("lateral raise", -20),
+            ],
+            "dumbbell_biceps_curl": [
+                ("dumbbell", 25),
+                ("bicep", 25),
+                ("biceps", 25),
+                ("curl", 30),
+                ("hammer", -20),
+                ("lunge", -30),
+            ],
+            "leg_press": [
+                ("leg press", 55),
+                ("sled", 25),
+                ("smith", 10),
+                ("squat", -10),
+            ],
+            "kettlebell_or_dumbbell_swing": [
+                ("swing", 50),
+                ("kettlebell", 25),
+                ("dumbbell", 15),
+                ("deadlift", -15),
+            ],
+            "seated_calf_raise": [
+                ("seated calf", 50),
+                ("calf raise", 35),
+                ("calf press", 20),
+                ("stretch", -40),
+            ],
+            "weighted_russian_twist": [
+                ("weighted", 25),
+                ("russian twist", 45),
+                ("twist", 25),
+                ("cable", 10),
+                ("stretch", -30),
+            ],
+            "dumbbell_arnold_press": [
+                ("arnold", 50),
+                ("dumbbell", 25),
+                ("press", 20),
+            ],
+            "dumbbell_hammer_curl": [
+                ("hammer", 50),
+                ("dumbbell", 25),
+                ("curl", 25),
+                ("lunge", -30),
+            ],
+            "overhead_cable_triceps_extension": [
+                ("overhead", 35),
+                ("cable", 35),
+                ("triceps", 25),
+                ("extension", 25),
+                ("pushdown", -20),
+                ("dip", -30),
+            ],
+            "zone2_cardio": [
+                ("incline", 25),
+                ("walk", 25),
+                ("treadmill", 30),
+                ("bike", 20),
+                ("elliptical", 15),
+            ],
+            "bike_hiit": [
+                ("bike", 45),
+                ("cycle", 35),
+                ("cycling", 35),
+                ("treadmill", -10),
+            ],
+        }
+
+        score = 0
+        for term, value in intent_terms.get(slot_type, []):
+            if term in text:
+                score += value
+
+        if (
+            slot_type
+            in {
+                "machine_chest_press",
+                "wide_lat_pulldown",
+                "close_grip_lat_pulldown",
+                "leg_press",
+            }
+            and equipment_category == "machine"
+        ):
+            score += 20
+        if (
+            slot_type
+            in {
+                "cable_triceps_pushdown",
+                "overhead_cable_triceps_extension",
+                "cable_crunch",
+            }
+            and equipment_category == "cable"
+        ):
+            score += 20
+        if (
+            slot_type
+            in {
+                "incline_dumbbell_press",
+                "seated_dumbbell_shoulder_press",
+                "dumbbell_lateral_raise",
+                "romanian_deadlift",
+                "goblet_squat",
+                "dumbbell_lunge",
+                "dumbbell_biceps_curl",
+                "dumbbell_arnold_press",
+                "dumbbell_hammer_curl",
+            }
+            and equipment_category == "free_weight"
+        ):
+            score += 15
+
+        return score

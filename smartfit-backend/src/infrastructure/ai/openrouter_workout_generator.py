@@ -17,6 +17,7 @@ from src.domain.common.exceptions import (
     AIConfigurationError,
     AIGenerationError,
     AIInvalidOutputError,
+    AIPaymentRequiredError,
     AIProviderTimeoutError,
     AIRateLimitError,
 )
@@ -145,9 +146,36 @@ class OpenRouterWorkoutGenerator(AIWorkoutGeneratorPort):
             "max_tokens": settings.OPENROUTER_MAX_OUTPUT_TOKENS,
             "response_format": {"type": "json_object"},
         }
-        response = await self._post_chat_completion(payload)
-        logger.info("OpenRouter workout generation completed successfully.")
-        return self._extract_text(response)
+        try:
+            response = await self._post_chat_completion(payload)
+            logger.info("OpenRouter workout generation completed successfully.")
+            return self._extract_text(response)
+        except AIPaymentRequiredError as exc:
+            logger.warning(
+                "OpenRouter request failed with 402 Payment Required for model %s. Retrying with free fallback models...",
+                settings.OPENROUTER_MODEL,
+            )
+            fallback_models = [
+                "google/gemini-2.5-flash:free",
+                "meta-llama/llama-3-8b-instruct:free",
+                "google/gemma-2-9b-it:free",
+            ]
+            last_err = exc
+            for model in fallback_models:
+                logger.info("Retrying OpenRouter workout generation with free model: %s", model)
+                fallback_payload = dict(payload)
+                fallback_payload["model"] = model
+                try:
+                    response = await self._post_chat_completion(fallback_payload)
+                    logger.info("OpenRouter workout generation completed successfully using fallback model %s.", model)
+                    return self._extract_text(response)
+                except AIPaymentRequiredError as fallback_exc:
+                    last_err = fallback_exc
+                    logger.warning("Fallback model %s failed with 402 Payment Required.", model)
+                except Exception as fallback_exc:
+                    last_err = fallback_exc
+                    logger.warning("Fallback model %s failed: %s", model, fallback_exc)
+            raise last_err
 
     async def _post_chat_completion(self, payload: dict[str, Any]) -> dict[str, Any]:
         settings = get_settings()
@@ -176,6 +204,10 @@ class OpenRouterWorkoutGenerator(AIWorkoutGeneratorPort):
 
         if response.status_code == 429:
             raise AIRateLimitError("OpenRouter rate limit or quota exceeded.")
+        if response.status_code == 402:
+            raise AIPaymentRequiredError(
+                f"OpenRouter provider error 402: {response.text}"
+            )
         if response.status_code >= 400:
             raise AIGenerationError(
                 f"OpenRouter provider error {response.status_code}: {response.text}"

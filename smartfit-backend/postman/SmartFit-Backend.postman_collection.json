@@ -67,6 +67,14 @@
     {
       "key": "toDate",
       "value": "2026-06-03"
+    },
+    {
+      "key": "programId",
+      "value": ""
+    },
+    {
+      "key": "instanceId",
+      "value": ""
     }
   ],
   "item": [
@@ -1202,6 +1210,378 @@
                   "key": "week_start",
                   "value": "{{weekStart}}"
                 }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Programs",
+      "item": [
+        {
+          "name": "Create Program",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const programId = json?.data?.id;",
+                  "if (pm.response.code === 200 && programId) {",
+                  "  pm.collectionVariables.set('programId', programId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"goal\": \"muscle_gain\",\n  \"duration_weeks\": 6,\n  \"days_per_week\": 4,\n  \"session_duration_minutes\": 60,\n  \"preferred_split\": \"upper_lower\",\n  \"training_style\": \"balanced\",\n  \"focus_areas\": [\"posture\", \"back\"],\n  \"generation_mode\": \"rule_based\",\n  \"generation_strategy\": \"full_program\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Active Program",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/active",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "active"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Today Program Workout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const instanceId = json?.data?.instance_id || json?.data?.scheduled_workout?.instance_id;",
+                  "const workoutPlanId = json?.data?.workout_plan_id || json?.data?.scheduled_workout?.planned_workout_plan_id;",
+                  "if (pm.response.code === 200) {",
+                  "  if (instanceId) pm.collectionVariables.set('instanceId', instanceId);",
+                  "  if (workoutPlanId) pm.collectionVariables.set('workoutId', workoutPlanId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/active/today?date={{targetDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "active",
+                "today"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{targetDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Active Program Calendar",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/active/calendar?from_date={{fromDate}}&to_date={{toDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "active",
+                "calendar"
+              ],
+              "query": [
+                {
+                  "key": "from_date",
+                  "value": "{{fromDate}}"
+                },
+                {
+                  "key": "to_date",
+                  "value": "{{toDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Program Week",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/{{programId}}/weeks/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "{{programId}}",
+                "weeks",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Open Today Planned Workout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const wId = json?.data?.workout_id;",
+                  "const firstExerciseId = json?.data?.exercises?.[0]?.workout_plan_exercise_id;",
+                  "if (pm.response.code === 200) {",
+                  "  if (wId) pm.collectionVariables.set('workoutId', wId);",
+                  "  if (firstExerciseId) pm.collectionVariables.set('workoutPlanExerciseId', firstExerciseId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"instance_id\": \"{{instanceId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/active/today/open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "active",
+                "today",
+                "open"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Generate Today Program Workout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const wId = json?.data?.workout_id;",
+                  "const firstExerciseId = json?.data?.exercises?.[0]?.workout_plan_exercise_id;",
+                  "if (pm.response.code === 200) {",
+                  "  if (wId) pm.collectionVariables.set('workoutId', wId);",
+                  "  if (firstExerciseId) pm.collectionVariables.set('workoutPlanExerciseId', firstExerciseId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/active/today/generate?date={{targetDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "active",
+                "today",
+                "generate"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{targetDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Adjust Today Workout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const wId = json?.data?.workout_id;",
+                  "const firstExerciseId = json?.data?.exercises?.[0]?.workout_plan_exercise_id;",
+                  "if (pm.response.code === 200) {",
+                  "  if (wId) pm.collectionVariables.set('workoutId', wId);",
+                  "  if (firstExerciseId) pm.collectionVariables.set('workoutPlanExerciseId', firstExerciseId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"instance_id\": \"{{instanceId}}\",\n  \"adjustment_type\": \"reduced_volume\",\n  \"reason\": \"Felt a bit tired today\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/active/today/adjust",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "active",
+                "today",
+                "adjust"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Skip Program Workout",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/workouts/{{instanceId}}/skip",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "workouts",
+                "{{instanceId}}",
+                "skip"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reschedule Program Workout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scheduled_date\": \"{{targetDate}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/workouts/{{instanceId}}/reschedule",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "workouts",
+                "{{instanceId}}",
+                "reschedule"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Regenerate Program",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_week\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/programs/{{programId}}/regenerate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "programs",
+                "{{programId}}",
+                "regenerate"
               ]
             }
           }

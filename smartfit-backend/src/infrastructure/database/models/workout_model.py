@@ -67,6 +67,8 @@ class WorkoutLogModel(SQLModel, table=True):
     total_volume: float = Field(default=0)
     calories_burned: float | None = Field(default=None)
     avg_heart_rate: float | None = Field(default=None)
+    max_heart_rate: float | None = Field(default=None)
+    min_heart_rate: float | None = Field(default=None)
     notes: str | None = Field(default=None, max_length=2000)
     created_at: datetime = Field(
         default_factory=utcnow,

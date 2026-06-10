@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     OPENROUTER_MAX_OUTPUT_TOKENS: int = Field(default=2500)
     OPENROUTER_HTTP_REFERER: str = Field(default="")
     OPENROUTER_APP_TITLE: str = Field(default="SmartFit")
+    OLLAMA_API_URL: str = Field(default="https://hiuhiu87-my-ollama-api.hf.space/api/generate")
+    OLLAMA_MODEL: str = Field(default="gemma:2b")
     ENVIRONMENT: str = Field(default="local")
 
     @field_validator("DATABASE_URL", mode="before")

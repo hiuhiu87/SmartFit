@@ -16,11 +16,29 @@ class AIWorkoutOutputMapper:
         result: AIWorkoutGenerationResult,
         context: AIWorkoutGenerationContext,
     ) -> WorkoutPlan:
+        import re
+        def clean(s: str) -> str:
+            val = s.lower().replace("_", "-").replace(" ", "-").strip("-")
+            return re.sub(r'^exdb-\d+-', '', val)
+
+        allowed_by_clean_slug = {clean(item.slug): item for item in context.allowed_exercises}
         allowed_by_slug = {item.slug: item for item in context.allowed_exercises}
+
         plan_id = uuid4()
         exercises: list[WorkoutPlanExercise] = []
         for index, item in enumerate(result.exercises, start=1):
             allowed = allowed_by_slug.get(item.exercise_slug)
+            if allowed is None:
+                clean_ai_slug = clean(item.exercise_slug)
+                allowed = allowed_by_clean_slug.get(clean_ai_slug)
+
+            if allowed is None:
+                clean_ai_slug = clean(item.exercise_slug)
+                for clean_db_slug, candidate in allowed_by_clean_slug.items():
+                    if clean_ai_slug in clean_db_slug or clean_db_slug in clean_ai_slug:
+                        allowed = candidate
+                        break
+
             if allowed is None:
                 raise AIExerciseMappingError(
                     f"Cannot map AI exercise slug: {item.exercise_slug}"
