@@ -30,21 +30,21 @@ final class ProgressOverviewViewModel: ObservableObject {
         do {
             overview = try await repository.getProgressOverview(fromDate: nil, toDate: nil)
         } catch {
-            overview = nil
+            if error.isCancellation { return }
             partialFailures.append("overview")
         }
 
         do {
             personalRecords = try await repository.getPersonalRecords(limit: 10, exerciseId: nil, metric: nil).items
         } catch {
-            personalRecords = []
+            if error.isCancellation { return }
             partialFailures.append("records")
         }
 
         do {
             weeklyReport = try await repository.getWeeklyReport(weekStart: nil)
         } catch {
-            weeklyReport = nil
+            if error.isCancellation { return }
             partialFailures.append("report")
         }
 

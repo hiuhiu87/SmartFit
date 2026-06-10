@@ -8,8 +8,8 @@ struct EmptyStateView: View {
     var action: (() -> Void)?
 
     var body: some View {
-        AppCard(cornerRadius: 18, padding: 22) {
-            VStack(alignment: .leading, spacing: 14) {
+        AppCard(cornerRadius: AppRadius.card, padding: AppSpacing.xxl) {
+            VStack(alignment: .leading, spacing: AppSpacing.md) {
                 Image(systemName: systemImage)
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(AppColors.primary)
@@ -23,5 +23,22 @@ struct EmptyStateView: View {
                 }
             }
         }
+    }
+}
+
+struct EmptyStateView_Previews: PreviewProvider {
+    static var previews: some View {
+        ZStack {
+            AppColors.background.ignoresSafeArea()
+            EmptyStateView(
+                title: "No workouts yet",
+                message: "Your completed sessions will appear here after you finish a workout.",
+                systemImage: "figure.strengthtraining.traditional",
+                actionTitle: "Build Workout"
+            ) {}
+            .padding(AppSpacing.xxl)
+        }
+        .preferredColorScheme(.dark)
+        .previewDisplayName("EmptyStateView")
     }
 }

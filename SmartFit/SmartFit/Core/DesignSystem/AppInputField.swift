@@ -1,12 +1,12 @@
 import SwiftUI
 
 struct AppInputField<Content: View>: View {
-    var cornerRadius: CGFloat = 14
+    var cornerRadius: CGFloat = AppRadius.input
     @ViewBuilder let content: Content
 
     var body: some View {
         content
-            .padding()
+            .padding(AppSpacing.lg)
             .background(AppColors.surfaceElevated)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

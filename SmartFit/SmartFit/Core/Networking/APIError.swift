@@ -25,3 +25,23 @@ enum APIError: LocalizedError {
         }
     }
 }
+
+extension Error {
+    var isCancellation: Bool {
+        if self is CancellationError {
+            return true
+        }
+
+        if let apiError = self as? APIError,
+           case let .transport(underlyingError) = apiError {
+            return underlyingError.isCancellation
+        }
+
+        if let urlError = self as? URLError {
+            return urlError.code == .cancelled
+        }
+
+        let nsError = self as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+    }
+}

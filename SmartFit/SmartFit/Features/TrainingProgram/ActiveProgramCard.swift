@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct ActiveProgramCard: View {
-    let program: TrainingProgramResponse
-    let todayWorkout: ProgramTodayWorkoutResponse?
+    let program: ActiveProgramResponse
+    let todayWorkout: TodayProgramWorkoutResponse?
     let isGenerating: Bool
     let onOpenProgram: () -> Void
     let onGenerateWorkout: () -> Void
@@ -36,24 +36,23 @@ struct ActiveProgramCard: View {
 
                 Divider().overlay(AppColors.border)
 
-                if let todayWorkout, todayWorkout.scheduled, let template = todayWorkout.template {
+                if let todayWorkout, let scheduled = todayWorkout.scheduledWorkout {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(dayLabel(todayWorkout))
                             .font(AppTypography.caption)
                             .foregroundStyle(AppColors.textSecondary)
-                        Text(template.title)
+                        Text(scheduled.title)
                             .font(AppTypography.headline)
                         HStack(spacing: 14) {
-                            Label("\(template.estimatedDurationMinutes) min", systemImage: "clock")
-                            Label(template.focusType.programDisplayName, systemImage: "scope")
+                            Label(scheduled.focusType.programDisplayName, systemImage: "scope")
                         }
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.textSecondary)
                     }
 
-                    if !["completed", "skipped"].contains(todayWorkout.status ?? "") {
+                    if !["completed", "skipped"].contains(scheduled.status.lowercased()) {
                         PrimaryButton(
-                            title: actionTitle(todayWorkout),
+                            title: actionTitle(scheduled.status),
                             isLoading: isGenerating,
                             systemImage: "figure.strengthtraining.traditional",
                             action: onGenerateWorkout
@@ -76,14 +75,14 @@ struct ActiveProgramCard: View {
         }
     }
 
-    private func dayLabel(_ workout: ProgramTodayWorkoutResponse) -> String {
-        let week = workout.weekNumber ?? program.currentWeek
-        let day = (workout.dayIndex ?? program.currentDayIndex) + 1
+    private func dayLabel(_ workout: TodayProgramWorkoutResponse) -> String {
+        let week = workout.weekNumber
+        let day = (workout.dayIndex ?? 0) + 1
         return "WEEK \(week) · DAY \(day)"
     }
 
-    private func actionTitle(_ workout: ProgramTodayWorkoutResponse) -> String {
-        switch workout.status {
+    private func actionTitle(_ status: String) -> String {
+        switch status.lowercased() {
         case "generated", "started":
             return "Open Today’s Workout"
         case "completed":

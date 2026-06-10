@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ProgramTodayWorkoutView: View {
     let program: TrainingProgramResponse
-    let todayWorkout: ProgramTodayWorkoutResponse
+    let todayWorkout: TodayProgramWorkoutResponse
     let readiness: ReadinessResponse?
     let equipment: [String]
     let programRepository: ProgramRepository
@@ -16,7 +16,7 @@ struct ProgramTodayWorkoutView: View {
 
     init(
         program: TrainingProgramResponse,
-        todayWorkout: ProgramTodayWorkoutResponse,
+        todayWorkout: TodayProgramWorkoutResponse,
         readiness: ReadinessResponse?,
         equipment: [String],
         programRepository: ProgramRepository,
@@ -30,7 +30,7 @@ struct ProgramTodayWorkoutView: View {
         self.programRepository = programRepository
         self.workoutRepository = workoutRepository
         self.workoutMetricsReader = workoutMetricsReader
-        _generatedWorkoutID = State(initialValue: todayWorkout.workoutPlanID)
+        _generatedWorkoutID = State(initialValue: todayWorkout.workoutPlanId)
     }
 
     var body: some View {
@@ -100,7 +100,7 @@ struct ProgramTodayWorkoutView: View {
         AppCard(cornerRadius: 24, padding: 22) {
             VStack(alignment: .leading, spacing: 14) {
                 Text(
-                    "WEEK \(todayWorkout.weekNumber ?? program.currentWeek) · "
+                    "WEEK \(todayWorkout.weekNumber) · "
                         + "DAY \((todayWorkout.dayIndex ?? program.currentDayIndex) + 1)"
                 )
                 .font(AppTypography.caption.weight(.semibold))
@@ -111,7 +111,9 @@ struct ProgramTodayWorkoutView: View {
 
                 if let template = todayWorkout.template {
                     HStack(spacing: 16) {
-                        Label("\(template.estimatedDurationMinutes) min", systemImage: "clock")
+                        if let duration = template.estimatedDurationMinutes {
+                            Label("\(duration) min", systemImage: "clock")
+                        }
                         Label(template.focusType.programDisplayName, systemImage: "scope")
                     }
                     .font(AppTypography.caption)
@@ -144,29 +146,25 @@ struct ProgramTodayWorkoutView: View {
         }
     }
 
-    private func slotOverview(_ template: ProgramWorkoutTemplate) -> some View {
+    private func slotOverview(_ template: ProgramWorkoutTemplateSummary) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader(
                 title: "Session Structure",
-                subtitle: "Exercise selection adapts to readiness and available equipment."
+                subtitle: "Structured for \(template.focusType.programDisplayName)."
             )
-            ForEach(template.slots.filter(\.required)) { slot in
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(slot.slotType.programDisplayName)
-                            .font(AppTypography.body.weight(.semibold))
-                        Text("\(slot.baseSets) sets · \(slot.baseReps) reps · RPE \(slot.baseRpe)")
-                            .font(AppTypography.caption)
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    Spacer()
-                    Image(systemName: "checkmark.circle")
-                        .foregroundStyle(AppColors.primary)
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(template.title)
+                        .font(AppTypography.body.weight(.semibold))
+                    Text(template.focusType.programDisplayName)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
                 }
-                .padding(16)
-                .background(AppColors.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Spacer()
             }
+            .padding(16)
+            .background(AppColors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 
@@ -192,9 +190,7 @@ struct ProgramTodayWorkoutView: View {
             if let workoutID = generatedWorkoutID {
                 workout = try await workoutRepository.getWorkoutDetail(workoutId: workoutID)
             } else {
-                let generated = try await programRepository.generateTodayWorkout(date: workoutDate)
-                generatedWorkoutID = generated.workoutID
-                workout = generated
+                errorMessage = "No planned workout available for today."
             }
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription

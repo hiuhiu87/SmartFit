@@ -23,6 +23,7 @@ final class WorkoutPreviewViewModel: ObservableObject {
         do {
             workout = try await workoutRepository.getWorkoutDetail(workoutId: workout.workoutID)
         } catch {
+            if error.isCancellation { return }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Unable to refresh workout."
         }
     }

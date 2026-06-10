@@ -4,8 +4,8 @@ struct LoadingStateView: View {
     var message: String = "Loading..."
 
     var body: some View {
-        AppCard(cornerRadius: 18, padding: 22) {
-            HStack(spacing: 12) {
+        AppCard(cornerRadius: AppRadius.card, padding: AppSpacing.xxl) {
+            HStack(spacing: AppSpacing.md) {
                 ProgressView()
                     .tint(AppColors.primary)
                 Text(message)
@@ -13,6 +13,6 @@ struct LoadingStateView: View {
                     .foregroundStyle(AppColors.textSecondary)
             }
         }
-        .padding(24)
+        .padding(AppSpacing.xxl)
     }
 }

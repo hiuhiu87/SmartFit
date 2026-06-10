@@ -6,20 +6,32 @@ struct ErrorStateView: View {
     var retryAction: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(AppColors.error)
-            Text(message)
-                .font(AppTypography.body)
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.center)
-            if let retryAction {
-                PrimaryButton(title: retryTitle, action: retryAction)
+        AppCard(cornerRadius: AppRadius.card, padding: AppSpacing.xxl) {
+            VStack(spacing: AppSpacing.lg) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(AppColors.error)
+                Text(message)
+                    .font(AppTypography.body)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .multilineTextAlignment(.center)
+                if let retryAction {
+                    PrimaryButton(title: retryTitle, action: retryAction)
+                }
             }
+            .frame(maxWidth: .infinity)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppColors.background.ignoresSafeArea())
+        .padding(AppSpacing.xxl)
+    }
+}
+
+struct ErrorStateView_Previews: PreviewProvider {
+    static var previews: some View {
+        ZStack {
+            AppColors.background.ignoresSafeArea()
+            ErrorStateView(message: "We could not refresh your workout plan.", retryAction: {})
+        }
+        .preferredColorScheme(.dark)
+        .previewDisplayName("ErrorStateView")
     }
 }

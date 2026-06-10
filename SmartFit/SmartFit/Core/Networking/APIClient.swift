@@ -69,6 +69,9 @@ final class APIClient {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            if error.isCancellation {
+                throw CancellationError()
+            }
             throw APIError.transport(error)
         }
 
@@ -126,6 +129,9 @@ final class APIClient {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            if error.isCancellation {
+                throw CancellationError()
+            }
             throw APIError.transport(error)
         }
 

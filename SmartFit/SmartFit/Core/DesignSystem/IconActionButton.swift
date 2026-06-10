@@ -11,13 +11,13 @@ struct IconActionButton: View {
             Image(systemName: systemName)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(tint)
-                .frame(width: 48, height: 48)
+                .frame(width: AppSpacing.huge + AppSpacing.sm, height: AppSpacing.huge + AppSpacing.sm)
                 .background(AppColors.surfaceElevated)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous)
                         .stroke(AppColors.border, lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)

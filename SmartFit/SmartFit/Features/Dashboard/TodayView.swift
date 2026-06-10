@@ -3,6 +3,9 @@ import SwiftUI
 struct TodayView: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var viewModel = TodayViewModel()
+    
+    @State private var showingReschedulePicker = false
+    @State private var newScheduledDate = Date()
 
     var body: some View {
         NavigationStack {
@@ -11,23 +14,24 @@ struct TodayView: View {
                     LoadingView(message: "Loading today...")
                 } else {
                     ScrollView {
-                        VStack(spacing: 20) {
+                        VStack(spacing: AppSpacing.xl) {
                             programSection
 
                             if let readiness = viewModel.readiness {
-                            DailyReadinessCard(
-                                readiness: readiness,
-                                lastSyncDate: viewModel.lastSyncDate,
-                                onGenerateWorkout: { viewModel.navigateToWorkoutBuilder = true },
-                                onRefresh: { Task { await viewModel.syncHealthAndCalculateReadiness() } },
-                                showsGenerateWorkout: viewModel.activeProgram == nil
-                            )
-                            ReadinessFactorListView(readiness: readiness)
+                                DailyReadinessCard(
+                                    readiness: readiness,
+                                    lastSyncDate: viewModel.lastSyncDate,
+                                    onGenerateWorkout: { viewModel.navigateToWorkoutBuilder = true },
+                                    onRefresh: { Task { await viewModel.syncHealthAndCalculateReadiness() } },
+                                    showsGenerateWorkout: viewModel.activeProgram == nil
+                                )
+                                ReadinessFactorListView(readiness: readiness)
                             } else {
                                 HealthKitPermissionView(
                                     permissionState: viewModel.healthPermissionState,
                                     isSyncing: viewModel.isSyncingHealth,
-                                    onConnect: { Task { await viewModel.connectHealthKit() } },
+                                    includeSleepData: $viewModel.includeSleepHealthData,
+                                    onConnect: { Task { await viewModel.connectHealthKit(includeSleep: viewModel.includeSleepHealthData) } },
                                     onManualCheckIn: { viewModel.showManualCheckIn = true }
                                 )
                                 if viewModel.showManualCheckIn {
@@ -40,7 +44,7 @@ struct TodayView: View {
                                 }
                             }
                         }
-                        .padding(24)
+                        .padding(AppSpacing.xxl)
                     }
                     .refreshable { await viewModel.refresh() }
                 }
@@ -83,11 +87,9 @@ struct TodayView: View {
                     workoutDate: viewModel.workoutDate,
                     readiness: viewModel.readiness,
                     initialEquipment: appState.currentUser?.equipmentTypes ?? [],
-                    initialWorkoutSplit: viewModel.todayProgramWorkout?.template?.workoutType ?? "full_body",
-                    initialFocusMuscle: viewModel.todayProgramWorkout?.template?.focusType,
-                    initialAvailableTimeMinutes: viewModel.todayProgramWorkout?.template?.estimatedDurationMinutes
-                        ?? viewModel.activeProgram?.sessionDurationMinutes
-                        ?? 60,
+                    initialWorkoutSplit: viewModel.todayProgramWorkout?.scheduledWorkout?.focusType ?? "full_body",
+                    initialFocusMuscle: viewModel.todayProgramWorkout?.scheduledWorkout?.focusType,
+                    initialAvailableTimeMinutes: viewModel.activeProgram?.sessionDurationMinutes ?? 60,
                     initialGenerationMode: viewModel.activeProgram?.generationMode ?? "auto",
                     initialAvoidExercisesText: "",
                     initialUserNote: "",
@@ -104,31 +106,65 @@ struct TodayView: View {
                     Text(errorMessage)
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, AppSpacing.lg)
+                        .padding(.vertical, AppSpacing.md)
                         .background(AppColors.error)
                         .clipShape(Capsule())
-                        .padding(.bottom, 16)
+                        .padding(.bottom, AppSpacing.lg)
                 }
+            }
+            .sheet(isPresented: $showingReschedulePicker) {
+                VStack(spacing: AppSpacing.xl) {
+                    Text("Reschedule Today's Workout")
+                        .font(AppTypography.title)
+                    DatePicker("Select Date", selection: $newScheduledDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .background(AppColors.surfaceElevated)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.input, style: .continuous))
+                    
+                    PrimaryButton(title: "Confirm Reschedule") {
+                        Task {
+                            await viewModel.rescheduleTodayWorkout(to: newScheduledDate)
+                            showingReschedulePicker = false
+                        }
+                    }
+                    SecondaryButton(title: "Cancel") {
+                        showingReschedulePicker = false
+                    }
+                }
+                .padding(AppSpacing.xxl)
+                .background(AppColors.background.ignoresSafeArea())
+                .presentationDetents([.medium, .large])
             }
         }
     }
 
     @ViewBuilder
     private var programSection: some View {
-        if let program = viewModel.activeProgram {
-            ActiveProgramCard(
+        if let program = viewModel.activeProgram, let todayWorkout = viewModel.todayProgramWorkout {
+            TodayProgramWorkoutCard(
                 program: program,
-                todayWorkout: viewModel.todayProgramWorkout,
-                isGenerating: viewModel.isGeneratingProgramWorkout,
-                onOpenProgram: { viewModel.navigateToProgramDetail = true },
-                onGenerateWorkout: {
-                    Task { await viewModel.openOrGenerateProgramWorkout() }
+                todayWorkout: todayWorkout,
+                onOpenWorkout: {
+                    Task { await viewModel.openTodayWorkout() }
+                },
+                onAdjustWorkout: {
+                    Task { await viewModel.adjustTodayWorkout() }
+                },
+                onSkip: {
+                    Task { await viewModel.skipTodayWorkout() }
+                },
+                onReschedule: {
+                    showingReschedulePicker = true
                 }
             )
+            .onTapGesture {
+                // Navigate to details if tapped outside buttons
+                viewModel.navigateToProgramDetail = true
+            }
         } else {
-            AppCard(cornerRadius: 24, padding: 22) {
-                VStack(alignment: .leading, spacing: 14) {
+            HeroCard {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
                     Image(systemName: "calendar.badge.plus")
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(AppColors.primary)
@@ -146,5 +182,14 @@ struct TodayView: View {
                 }
             }
         }
+    }
+}
+
+struct TodayView_Previews: PreviewProvider {
+    static var previews: some View {
+        TodayView()
+            .environmentObject(AppState(environment: AppEnvironment.bootstrap()))
+            .preferredColorScheme(.dark)
+            .previewDisplayName("Today Reference")
     }
 }

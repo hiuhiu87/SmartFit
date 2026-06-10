@@ -18,4 +18,5 @@ enum AppColors {
     static let error = danger
     static let success = Color(red: 0.33, green: 0.86, blue: 0.55)
     static let warning = Color(red: 0.98, green: 0.72, blue: 0.26)
+    static let info = Color(red: 0.38, green: 0.68, blue: 1.00)
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct HealthKitPermissionView: View {
     let permissionState: HealthPermissionState
     let isSyncing: Bool
+    @Binding var includeSleepData: Bool
     let onConnect: () -> Void
     let onManualCheckIn: () -> Void
 
@@ -12,17 +13,29 @@ struct HealthKitPermissionView: View {
                 Image(systemName: "heart.text.square.fill")
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(AppColors.primary)
-                Text("Readiness needs a signal")
+                Text("Connect workout metrics")
                     .font(AppTypography.title)
                 Text(description)
                     .font(AppTypography.body)
                     .foregroundStyle(AppColors.textSecondary)
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    dataPill("Sleep")
-                    dataPill("HRV")
-                    dataPill("Resting HR")
+                    dataPill("Workout")
+                    dataPill("Heart Rate")
+                    dataPill("Active Energy")
                     dataPill("Steps")
                 }
+                Toggle(isOn: $includeSleepData) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Include sleep data")
+                            .font(AppTypography.body.weight(.semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text("Optional. SmartFit can focus on workout metrics without sleep access.")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(AppColors.primary)
                 PrimaryButton(title: "Connect Apple Health", isLoading: isSyncing, systemImage: "heart.fill", action: onConnect)
                 SecondaryButton(title: "Manual Check-in", systemImage: "slider.horizontal.3", action: onManualCheckIn)
             }
@@ -44,11 +57,11 @@ struct HealthKitPermissionView: View {
         case .unavailable:
             return "Apple Health is not available on this device. You can still estimate readiness with a manual check-in."
         case .notDetermined:
-            return "SmartFit reads a small set of Apple Health recovery signals to estimate readiness. You can also skip and use manual check-in."
+            return "SmartFit reads workout-focused Apple Health data to improve training feedback. Sleep is optional."
         case .denied:
             return "Apple Health access is currently denied. You can enable it later in Settings, or continue with a manual check-in."
         case .authorized:
-            return "Apple Health is connected. Refresh to sync today’s recovery signals."
+            return "Apple Health is connected. Refresh to sync workout and recovery signals."
         }
     }
 }

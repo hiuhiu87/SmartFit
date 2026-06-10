@@ -180,6 +180,7 @@ final class WorkoutDetailViewModel: ObservableObject {
         do {
             workout = try await repository.getWorkoutDetail(workoutId: workoutId)
         } catch {
+            if error.isCancellation { return }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Unable to load workout detail."
         }
     }

@@ -40,8 +40,7 @@ final class WorkoutHistoryViewModel: ObservableObject {
             offset = response.items.count
             total = response.total
         } catch {
-            items = []
-            total = 0
+            if error.isCancellation { return }
             errorMessage = Self.message(for: error)
         }
     }
@@ -69,6 +68,7 @@ final class WorkoutHistoryViewModel: ObservableObject {
             offset += response.items.count
             total = response.total
         } catch {
+            if error.isCancellation { return }
             errorMessage = Self.message(for: error)
         }
     }

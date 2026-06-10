@@ -2,20 +2,21 @@ import SwiftUI
 
 struct CreateProgramView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel: CreateProgramViewModel
 
-    let repository: ProgramRepository
-    let equipment: [String]
-    let onCreated: (TrainingProgramResponse) -> Void
-
-    @State private var goal = "muscle_gain"
-    @State private var trainingStyle = "balanced"
-    @State private var durationWeeks = 6
-    @State private var daysPerWeek = 4
-    @State private var sessionDurationMinutes = 60
-    @State private var preferredSplit = "upper_lower"
-    @State private var focusAreas: Set<String> = []
-    @State private var isCreating = false
-    @State private var errorMessage: String?
+    init(
+        repository: ProgramRepositoryProtocol,
+        equipment: [String],
+        onCreated: @escaping (CreateProgramResponse) -> Void
+    ) {
+        _viewModel = StateObject(
+            wrappedValue: CreateProgramViewModel(
+                repository: repository,
+                equipment: equipment,
+                onCreated: onCreated
+            )
+        )
+    }
 
     private let goals = ["muscle_gain", "strength", "fat_loss", "endurance", "general_health"]
     private let trainingStyles = ["balanced", "hypertrophy", "strength", "conditioning", "posture", "glute_core", "returning"]
@@ -27,19 +28,19 @@ struct CreateProgramView: View {
             VStack(alignment: .leading, spacing: 22) {
                 introCard
                 selectionCard(title: "Goal") {
-                    optionPicker(values: goals, selection: $goal)
+                    optionPicker(values: goals, selection: $viewModel.goal)
                 }
                 selectionCard(title: "Training Style") {
-                    optionPicker(values: trainingStyles, selection: $trainingStyle)
+                    optionPicker(values: trainingStyles, selection: $viewModel.trainingStyle)
                 }
                 scheduleCard
                 selectionCard(title: "Preferred Split") {
-                    optionPicker(values: splits, selection: $preferredSplit)
+                    optionPicker(values: splits, selection: $viewModel.preferredSplit)
                 }
                 focusAreaCard
                 equipmentCard
 
-                if let errorMessage {
+                if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.danger)
@@ -47,10 +48,15 @@ struct CreateProgramView: View {
 
                 PrimaryButton(
                     title: "Create Training Program",
-                    isLoading: isCreating,
+                    isLoading: viewModel.isCreating,
                     systemImage: "calendar.badge.plus"
                 ) {
-                    Task { await createProgram() }
+                    Task {
+                        let success = await viewModel.createProgram()
+                        if success {
+                            dismiss()
+                        }
+                    }
                 }
             }
             .padding(24)
@@ -79,22 +85,22 @@ struct CreateProgramView: View {
                     .font(AppTypography.title)
                 stepperRow(
                     title: "Duration",
-                    value: "\(durationWeeks) weeks",
-                    binding: $durationWeeks,
+                    value: "\(viewModel.durationWeeks) weeks",
+                    binding: $viewModel.durationWeeks,
                     range: 2...16,
                     step: 1
                 )
                 stepperRow(
                     title: "Training days",
-                    value: "\(daysPerWeek) days / week",
-                    binding: $daysPerWeek,
-                    range: 2...5,
+                    value: "\(viewModel.daysPerWeek) days / week",
+                    binding: $viewModel.daysPerWeek,
+                    range: 2...6,
                     step: 1
                 )
                 stepperRow(
                     title: "Session length",
-                    value: "\(sessionDurationMinutes) minutes",
-                    binding: $sessionDurationMinutes,
+                    value: "\(viewModel.sessionDurationMinutes) minutes",
+                    binding: $viewModel.sessionDurationMinutes,
                     range: 30...120,
                     step: 15
                 )
@@ -106,11 +112,11 @@ struct CreateProgramView: View {
         selectionCard(title: "Focus Areas") {
             FlowLayout(spacing: 8) {
                 ForEach(availableFocusAreas, id: \.self) { area in
-                    chip(area, selected: focusAreas.contains(area)) {
-                        if focusAreas.contains(area) {
-                            focusAreas.remove(area)
+                    chip(area, selected: viewModel.focusAreas.contains(area)) {
+                        if viewModel.focusAreas.contains(area) {
+                            viewModel.focusAreas.remove(area)
                         } else {
-                            focusAreas.insert(area)
+                            viewModel.focusAreas.insert(area)
                         }
                     }
                 }
@@ -127,7 +133,7 @@ struct CreateProgramView: View {
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
                 FlowLayout(spacing: 8) {
-                    ForEach(equipment, id: \.self) { item in
+                    ForEach(viewModel.equipment, id: \.self) { item in
                         chip(item, selected: true, action: {})
                             .allowsHitTesting(false)
                     }
@@ -215,31 +221,6 @@ struct CreateProgramView: View {
         default: return "Use SmartFit’s structured weekly template."
         }
     }
-
-    private func createProgram() async {
-        isCreating = true
-        errorMessage = nil
-        defer { isCreating = false }
-
-        do {
-            let program = try await repository.createProgram(
-                CreateProgramRequest(
-                    goal: goal,
-                    durationWeeks: durationWeeks,
-                    daysPerWeek: daysPerWeek,
-                    sessionDurationMinutes: sessionDurationMinutes,
-                    preferredSplit: preferredSplit,
-                    focusAreas: Array(focusAreas).sorted(),
-                    generationMode: "auto",
-                    trainingStyle: trainingStyle
-                )
-            )
-            onCreated(program)
-            dismiss()
-        } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription ?? "Unable to create program."
-        }
-    }
 }
 
 private struct FlowLayout: Layout {
@@ -250,8 +231,27 @@ private struct FlowLayout: Layout {
         subviews: Subviews,
         cache: inout ()
     ) -> CGSize {
-        let result = layout(subviews: subviews, width: proposal.width ?? 0)
-        return result.size
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var maxHeight: CGFloat = 0
+
+        let maxW = proposal.width ?? .infinity
+
+        for size in sizes {
+            if currentX + size.width > maxW {
+                currentX = 0
+                currentY += maxHeight + spacing
+                maxHeight = 0
+            }
+            currentX += size.width + spacing
+            maxHeight = max(maxHeight, size.height)
+            width = max(width, currentX)
+            height = max(height, currentY + maxHeight)
+        }
+        return CGSize(width: width, height: height)
     }
 
     func placeSubviews(
@@ -260,31 +260,24 @@ private struct FlowLayout: Layout {
         subviews: Subviews,
         cache: inout ()
     ) {
-        let result = layout(subviews: subviews, width: bounds.width)
-        for (index, point) in result.points.enumerated() {
-            subviews[index].place(
-                at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y),
-                proposal: .unspecified
-            )
-        }
-    }
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        var currentX: CGFloat = bounds.minX
+        var currentY: CGFloat = bounds.minY
+        var maxHeight: CGFloat = 0
 
-    private func layout(subviews: Subviews, width: CGFloat) -> (size: CGSize, points: [CGPoint]) {
-        var points: [CGPoint] = []
-        var position = CGPoint.zero
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if position.x + size.width > width, position.x > 0 {
-                position.x = 0
-                position.y += rowHeight + spacing
-                rowHeight = 0
+        for (index, subview) in subviews.enumerated() {
+            let size = sizes[index]
+            if currentX + size.width > bounds.maxX {
+                currentX = bounds.minX
+                currentY += maxHeight + spacing
+                maxHeight = 0
             }
-            points.append(position)
-            position.x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                proposal: ProposedViewSize(size)
+            )
+            currentX += size.width + spacing
+            maxHeight = max(maxHeight, size.height)
         }
-        return (CGSize(width: width, height: position.y + rowHeight), points)
     }
 }

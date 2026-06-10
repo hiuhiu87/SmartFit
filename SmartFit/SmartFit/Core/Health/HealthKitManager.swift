@@ -27,10 +27,10 @@ final class HealthKitManager {
 
     func currentPermissionState() -> HealthPermissionState {
         guard isHealthDataAvailable() else { return .unavailable }
-        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+        guard let workoutType = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) else {
             return .unavailable
         }
-        switch store.authorizationStatus(for: sleepType) {
+        switch store.authorizationStatus(for: workoutType) {
         case .notDetermined:
             return .notDetermined
         case .sharingDenied:
@@ -42,12 +42,11 @@ final class HealthKitManager {
         }
     }
 
-    func requestAuthorization() async throws {
+    func requestAuthorization(includeSleep: Bool = false) async throws {
         guard isHealthDataAvailable() else {
             throw HealthKitError.unavailable
         }
 
-        let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)
         let hrv = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)
         let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate)
         let restingHeartRate = HKObjectType.quantityType(forIdentifier: .restingHeartRate)
@@ -55,7 +54,10 @@ final class HealthKitManager {
         let steps = HKObjectType.quantityType(forIdentifier: .stepCount)
         let workouts = HKObjectType.workoutType()
 
-        let readTypes = Set([sleep, hrv, heartRate, restingHeartRate, activeEnergy, steps, workouts].compactMap { $0 })
+        var readTypes = Set([hrv, heartRate, restingHeartRate, activeEnergy, steps, workouts].compactMap { $0 })
+        if includeSleep, let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
+            readTypes.insert(sleep)
+        }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             store.requestAuthorization(toShare: [], read: readTypes) { success, error in
                 if let error {
@@ -69,13 +71,11 @@ final class HealthKitManager {
         }
     }
 
-    func fetchDailyHealthSummary(for date: Date) async throws -> HealthSummaryDraft {
+    func fetchDailyHealthSummary(for date: Date, includeSleep: Bool = false) async throws -> HealthSummaryDraft {
         guard isHealthDataAvailable() else {
             throw HealthKitError.unavailable
         }
 
-        async let sleepHours = fetchSleepHours(for: date)
-        async let deepSleepHours = fetchDeepSleepHours(for: date)
         async let hrv = fetchLatestQuantityAverage(
             identifier: .heartRateVariabilitySDNN,
             unit: HKUnit.secondUnit(with: .milli),
@@ -102,10 +102,12 @@ final class HealthKitManager {
         )
         async let workoutMinutes = fetchWorkoutMinutesYesterday(for: date)
 
+        let sleepHours = includeSleep ? try await fetchSleepHours(for: date) : nil
+        let deepSleepHours = includeSleep ? try await fetchDeepSleepHours(for: date) : nil
         let summary = HealthSummaryDraft(
             date: date,
-            sleepHours: try await sleepHours,
-            deepSleepHours: try await deepSleepHours,
+            sleepHours: sleepHours,
+            deepSleepHours: deepSleepHours,
             hrvMS: try await hrv,
             restingHeartRate: try await restingHeartRate,
             activeEnergyBurned: try await activeEnergy,

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct WeeklyStructureView: View {
-    let templates: [ProgramWorkoutTemplate]
+    let templates: [ProgramWorkoutTemplateSummary]
     var currentDayIndex: Int?
 
     var body: some View {
@@ -11,7 +11,7 @@ struct WeeklyStructureView: View {
                 subtitle: "\(templates.count) planned training days"
             )
 
-            ForEach(templates.sorted(by: { $0.sequenceOrder < $1.sequenceOrder })) { template in
+            ForEach(templates.sorted(by: { $0.dayIndex < $1.dayIndex })) { template in
                 HStack(spacing: 14) {
                     Text("\(template.dayIndex + 1)")
                         .font(AppTypography.body.weight(.bold))
@@ -32,8 +32,8 @@ struct WeeklyStructureView: View {
                         Text(template.title)
                             .font(AppTypography.body.weight(.semibold))
                         Text(
-                            "\(template.focusType.programDisplayName) · "
-                                + "\(template.estimatedDurationMinutes) min"
+                            "\(template.focusType.programDisplayName)"
+                                + (template.estimatedDurationMinutes.map { " · \($0) min" } ?? "")
                         )
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.textSecondary)

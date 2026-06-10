@@ -15,6 +15,11 @@ struct WorkoutPreviewView: View {
     private let initialGenerationMode: String
     private let initialAvoidExercisesText: String
     private let initialUserNote: String
+    
+    // Program fields
+    private let isProgramWorkout: Bool
+    private let programWeek: Int?
+    private let programDay: Int?
 
     init(
         workout: WorkoutPlanResponse,
@@ -29,7 +34,10 @@ struct WorkoutPreviewView: View {
         initialAvoidExercisesText: String,
         initialUserNote: String,
         allowsRegeneration: Bool = true,
-        workoutMetricsReader: HealthKitWorkoutMetricsReader? = nil
+        workoutMetricsReader: HealthKitWorkoutMetricsReader? = nil,
+        isProgramWorkout: Bool = false,
+        programWeek: Int? = nil,
+        programDay: Int? = nil
     ) {
         self.workoutRepository = workoutRepository
         self.workoutMetricsReader = workoutMetricsReader
@@ -49,11 +57,14 @@ struct WorkoutPreviewView: View {
         self.initialGenerationMode = initialGenerationMode
         self.initialAvoidExercisesText = initialAvoidExercisesText
         self.initialUserNote = initialUserNote
+        self.isProgramWorkout = isProgramWorkout
+        self.programWeek = programWeek
+        self.programDay = programDay
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: AppSpacing.xl) {
                 summaryCard
 
                 if let reasoning = viewModel.workout.aiReasoningSummary, !reasoning.isEmpty {
@@ -64,9 +75,8 @@ struct WorkoutPreviewView: View {
                     infoCard(title: "Safety Note", message: safetyNote)
                 }
 
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Exercises")
-                        .font(AppTypography.title)
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    SectionHeader(title: "Exercises")
 
                     ForEach(viewModel.workout.exercises) { exercise in
                         WorkoutExerciseCard(exercise: exercise)
@@ -80,7 +90,7 @@ struct WorkoutPreviewView: View {
                     .frame(height: 220)
                 }
 
-                if allowsRegeneration {
+                if allowsRegeneration && !isProgramWorkout {
                     NavigationLink {
                         GenerateWorkoutView(
                             workoutDate: workoutDate,
@@ -96,25 +106,16 @@ struct WorkoutPreviewView: View {
                             workoutMetricsReader: workoutMetricsReader
                         )
                     } label: {
-                        Text("Regenerate")
-                            .font(AppTypography.body.weight(.semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(AppColors.surfaceElevated)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(AppColors.border, lineWidth: 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        SecondaryButton(title: "Regenerate", systemImage: "arrow.clockwise") {}
+                            .allowsHitTesting(false)
                     }
                 }
             }
-            .padding(24)
-            .padding(.bottom, 86)
+            .padding(AppSpacing.xxl)
+            .padding(.bottom, AppSpacing.huge + AppSpacing.huge + AppSpacing.sm)
         }
         .background(AppColors.background.ignoresSafeArea())
-        .navigationTitle("Workout Preview")
+        .navigationTitle(isProgramWorkout ? "Program Workout" : "Workout Preview")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
@@ -122,7 +123,7 @@ struct WorkoutPreviewView: View {
                 PrimaryButton(title: "Start Workout", systemImage: "play.fill") {
                     viewModel.startWorkout()
                 }
-                .padding(16)
+                .padding(AppSpacing.lg)
                 .background(AppColors.background.opacity(0.96))
             }
         }
@@ -139,30 +140,52 @@ struct WorkoutPreviewView: View {
     }
 
     private var summaryCard: some View {
-        AppCard(cornerRadius: 24, padding: 22) {
-            VStack(alignment: .leading, spacing: 16) {
+        HeroCard {
+            VStack(alignment: .leading, spacing: AppSpacing.lg) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        if isProgramWorkout {
+                            Text("PROGRAM WORKOUT")
+                                .font(AppTypography.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
+                        }
+                        
                         Text(viewModel.workout.title)
                             .font(AppTypography.hero)
-                        StatusBadge(title: viewModel.workout.sourceBadgeTitle, color: sourceBadgeColor)
+                            .multilineTextAlignment(.leading)
+                        
+                        if isProgramWorkout, let week = programWeek, let day = programDay {
+                            Text("Week \(week) · Day \(day)")
+                                .font(AppTypography.body.weight(.semibold))
+                                .foregroundStyle(AppColors.textSecondary)
+                        } else {
+                            StatusBadge(title: viewModel.workout.sourceBadgeTitle, color: sourceBadgeColor)
+                        }
                     }
                     Spacer()
                 }
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    compactMetric("Duration", "\(viewModel.workout.estimatedDurationMinutes ?? initialAvailableTimeMinutes) min")
-                    compactMetric("Focus", viewModel.workout.focusMuscle?.replacingOccurrences(of: "_", with: " ").capitalized ?? "AI choice")
-                    compactMetric("Split", initialWorkoutSplit.replacingOccurrences(of: "_", with: " ").capitalized)
-                    compactMetric("Plan", viewModel.workout.trainingDecisionLabel)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.md) {
+                    MetricCard(title: "Duration", value: "\(viewModel.workout.estimatedDurationMinutes ?? initialAvailableTimeMinutes) min")
+                    MetricCard(
+                        title: "Focus",
+                        value: viewModel.workout.focusMuscle?.replacingOccurrences(of: "_", with: " ").capitalized ?? "AI choice",
+                        tint: AppColors.info
+                    )
+                    MetricCard(
+                        title: "Split",
+                        value: initialWorkoutSplit.replacingOccurrences(of: "_", with: " ").capitalized,
+                        tint: AppColors.secondary
+                    )
+                    MetricCard(title: "Plan", value: viewModel.workout.trainingDecisionLabel, tint: AppColors.success)
                 }
             }
         }
     }
 
     private func infoCard(title: String, message: String) -> some View {
-        AppCard(cornerRadius: 20, padding: 18) {
-            VStack(alignment: .leading, spacing: 8) {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
                 Text(title)
                     .font(AppTypography.title)
                 Text(message)
@@ -170,23 +193,6 @@ struct WorkoutPreviewView: View {
                     .foregroundStyle(AppColors.textSecondary)
             }
         }
-    }
-
-    private func compactMetric(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
-            Text(value)
-                .font(AppTypography.body.weight(.semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(AppColors.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var sourceBadgeColor: Color {
@@ -203,41 +209,73 @@ struct WorkoutPreviewView: View {
     }
 }
 
-#if DEBUG
 struct WorkoutPreviewView_Previews: PreviewProvider {
     static var previews: some View {
-        Group {
-            NavigationStack {
-                WorkoutPreviewView(
-                    workout: .mockAI,
-                    workoutRepository: AppEnvironment.bootstrap().workoutRepository,
-                    workoutDate: "2026-06-01",
-                    readiness: .mockExcellent,
-                    initialEquipment: ["dumbbell", "bench", "bodyweight"],
-                    initialFocusMuscle: "chest",
-                    initialAvailableTimeMinutes: 60,
-                    initialGenerationMode: "auto",
-                    initialAvoidExercisesText: "",
-                    initialUserNote: ""
-                )
-            }
-
-            NavigationStack {
-                WorkoutPreviewView(
-                    workout: .mockFallback,
-                    workoutRepository: AppEnvironment.bootstrap().workoutRepository,
-                    workoutDate: "2026-06-01",
-                    readiness: .mockLow,
-                    initialEquipment: ["bodyweight"],
-                    initialFocusMuscle: "full_body",
-                    initialAvailableTimeMinutes: 45,
-                    initialGenerationMode: "rule_based",
-                    initialAvoidExercisesText: "",
-                    initialUserNote: ""
-                )
-            }
+        NavigationStack {
+            WorkoutPreviewView(
+                workout: .preview,
+                workoutRepository: AppEnvironment.bootstrap().workoutRepository,
+                workoutDate: "2026-06-10",
+                readiness: nil,
+                initialEquipment: ["dumbbells", "bench"],
+                initialWorkoutSplit: "upper_body",
+                initialFocusMuscle: "chest",
+                initialAvailableTimeMinutes: 45,
+                initialGenerationMode: "auto",
+                initialAvoidExercisesText: "",
+                initialUserNote: "",
+                allowsRegeneration: true
+            )
         }
         .preferredColorScheme(.dark)
+        .previewDisplayName("WorkoutPreview Reference")
     }
 }
-#endif
+
+private extension WorkoutPlanResponse {
+    static let preview = WorkoutPlanResponse(
+        workoutID: "preview-workout",
+        workoutLogID: nil,
+        title: "Upper Strength Builder",
+        goal: "Build strength with controlled volume",
+        focusMuscle: "chest",
+        estimatedDurationMinutes: 45,
+        trainingDecision: "normal_volume",
+        aiReasoningSummary: "Readiness supports a focused upper-body session with moderate volume and clean rest periods.",
+        safetyNote: "Stop if shoulder discomfort increases.",
+        status: "planned",
+        source: "ai",
+        exercises: [
+            WorkoutExerciseResponse(
+                workoutPlanExerciseID: "preview-exercise-1",
+                exerciseID: "bench-press",
+                name: "Dumbbell Bench Press",
+                orderIndex: 1,
+                primaryMuscle: "chest",
+                equipment: "dumbbells",
+                targetSets: 4,
+                targetReps: "8-10",
+                targetWeight: nil,
+                restSeconds: 90,
+                targetRpe: 8,
+                notes: "Keep two reps in reserve.",
+                loggedSets: nil
+            ),
+            WorkoutExerciseResponse(
+                workoutPlanExerciseID: "preview-exercise-2",
+                exerciseID: "row",
+                name: "One-Arm Dumbbell Row",
+                orderIndex: 2,
+                primaryMuscle: "back",
+                equipment: "dumbbells",
+                targetSets: 3,
+                targetReps: "10-12",
+                targetWeight: nil,
+                restSeconds: 75,
+                targetRpe: 7,
+                notes: nil,
+                loggedSets: nil
+            )
+        ]
+    )
+}

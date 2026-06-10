@@ -349,9 +349,8 @@ final class ActiveWorkoutViewModel: ObservableObject {
                     durationMinutes: durationMinutes,
                     caloriesBurned: healthMetrics?.activeEnergyBurned,
                     avgHeartRate: healthMetrics?.avgHeartRate,
-                    // Backend currently accepts calories and average heart rate only.
-                    maxHeartRate: nil,
-                    minHeartRate: nil,
+                    maxHeartRate: healthMetrics?.maxHeartRate,
+                    minHeartRate: healthMetrics?.minHeartRate,
                     difficultyFeedback: difficultyFeedback,
                     energyAfter: energyAfter,
                     notes: notes
