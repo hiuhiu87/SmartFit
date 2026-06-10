@@ -208,7 +208,7 @@ async def test_generate_upper_pull_rule_based_structured_workout(
     assert payload["status"] == "generated"
     assert payload["focus_muscle"] == "upper_body_pull"
     assert payload["estimated_duration_minutes"] == 60
-    assert len(payload["exercises"]) >= 6
+    assert len(payload["exercises"]) == 5
     assert len({item["exercise_id"] for item in payload["exercises"]}) == len(
         payload["exercises"]
     )

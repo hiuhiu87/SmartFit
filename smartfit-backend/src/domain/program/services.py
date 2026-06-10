@@ -10,33 +10,12 @@ from src.domain.program.entities import (
     ProgramWorkoutTemplate,
     TrainingProgram,
 )
+from src.domain.program.split_selection_policy import SplitSelectionPolicy
 
 
 class ProgramTemplateFactory:
-    STRUCTURES = {
-        2: [
-            ("Full Body A", "full_body", "full_body"),
-            ("Full Body B", "full_body", "full_body"),
-        ],
-        3: [
-            ("Full Body Strength", "full_body", "full_body"),
-            ("Upper Body", "upper_body", "upper_body"),
-            ("Lower Body + Conditioning", "lower_body", "lower_body"),
-        ],
-        4: [
-            ("Upper Push Balanced", "upper_push_balanced", "push"),
-            ("Lower Body + Core", "lower_core", "lower_body"),
-            ("Upper Pull Posture", "upper_pull_posture", "pull"),
-            ("Full Body Conditioning", "full_body_conditioning", "conditioning"),
-        ],
-        5: [
-            ("Push", "upper_body_push", "push"),
-            ("Pull", "upper_body_pull", "pull"),
-            ("Legs", "lower_body", "lower_body"),
-            ("Upper Accessories", "upper_body", "upper_body"),
-            ("Lower + Conditioning", "lower_body", "lower_body"),
-        ],
-    }
+    def __init__(self, split_policy: SplitSelectionPolicy | None = None) -> None:
+        self.split_policy = split_policy or SplitSelectionPolicy()
 
     def create_weekly_structure(
         self,
@@ -51,13 +30,12 @@ class ProgramTemplateFactory:
         training_style: str = "balanced",
     ) -> list[ProgramWorkoutTemplate]:
         del preferred_split
-        if days_per_week not in self.STRUCTURES:
-            raise ValidationError("days_per_week must be between 2 and 5.")
+        if not 2 <= days_per_week <= 6:
+            raise ValidationError("days_per_week must be between 2 and 6.")
 
         templates = []
-        for day_index, (title, focus, workout_type) in enumerate(
-            self.STRUCTURES[days_per_week]
-        ):
+        structure = self.split_policy.get_split_structure(days_per_week, training_style)
+        for day_index, (title, focus, workout_type) in enumerate(structure):
             template_id = uuid4()
             templates.append(
                 ProgramWorkoutTemplate(
@@ -218,6 +196,7 @@ class ProgramScheduler:
         3: [0, 2, 4],
         4: [0, 1, 3, 4],
         5: [0, 1, 2, 4, 5],
+        6: [0, 1, 2, 3, 4, 5],
     }
 
     def calculate_position(

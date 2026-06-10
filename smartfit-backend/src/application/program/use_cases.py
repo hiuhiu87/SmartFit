@@ -46,8 +46,8 @@ class ProgramService:
         profile = await self.user_repository.get_profile(command.user_id)
         if profile is None:
             raise NotFoundError("User profile not found.")
-        if not 2 <= command.days_per_week <= 5:
-            raise ValidationError("days_per_week must be between 2 and 5.")
+        if not 2 <= command.days_per_week <= 6:
+            raise ValidationError("days_per_week must be between 2 and 6.")
         if not 1 <= command.duration_weeks <= 52:
             raise ValidationError("duration_weeks must be between 1 and 52.")
 

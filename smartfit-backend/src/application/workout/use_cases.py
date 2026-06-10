@@ -11,6 +11,7 @@ from src.application.ai_usage.commands import (
 from src.application.ai_usage.use_cases import AIUsageService
 from src.domain.ai.entities import (
     AIAllowedExercise,
+    AIProgressionContext,
     AIRequestLog,
     AIWorkoutGenerationContext,
 )
@@ -76,6 +77,8 @@ from src.domain.workout.services import (
     WorkoutSafetyPolicy,
     WorkoutVolumeCalculator,
 )
+from src.domain.exercise.equipment_policy import get_equipment_category
+from src.domain.workout.workout_volume_policy import WorkoutVolumePolicy
 from src.infrastructure.ai.output_mapper import AIWorkoutOutputMapper
 from src.infrastructure.ai.safety_validator import AIWorkoutSafetyValidator
 
@@ -111,6 +114,7 @@ class GenerateWorkoutUseCase:
         self.safety_policy = safety_policy
         self.training_service = training_service
         self.progression_repository = progression_repository
+        self.volume_policy = WorkoutVolumePolicy()
 
     async def execute(self, command: GenerateWorkoutCommand) -> WorkoutPlanDTO:
         profile = await self.user_repository.get_profile(command.user_id)
@@ -170,7 +174,11 @@ class GenerateWorkoutUseCase:
             )
 
         goal = command.goal_override or profile.primary_goal.value
-        training_style = command.training_style_override or profile.training_style.value
+        training_style = self._effective_training_style(
+            profile,
+            command.training_style_override or profile.training_style.value,
+            has_explicit_override=command.training_style_override is not None,
+        )
         if command.generation_mode == "rule_based":
             plan = self._generate_rule_based(
                 command,
@@ -185,6 +193,7 @@ class GenerateWorkoutUseCase:
                 recent_workouts,
                 progression_histories,
                 training_style,
+                profile,
             )
         elif command.generation_mode in {"gemini", "openrouter"}:
             try:
@@ -219,6 +228,9 @@ class GenerateWorkoutUseCase:
                 usage_date=usage_date,
                 input_payload=ai_input_payload,
                 training_context=training_context,
+                profile=profile,
+                progression_histories=progression_histories,
+                training_style=training_style,
             )
         else:
             try:
@@ -239,6 +251,9 @@ class GenerateWorkoutUseCase:
                     usage_date=usage_date,
                     input_payload=ai_input_payload,
                     training_context=training_context,
+                    profile=profile,
+                    progression_histories=progression_histories,
+                    training_style=training_style,
                 )
             except AIUsageLimitExceededError as exc:
                 logger.error(
@@ -271,6 +286,7 @@ class GenerateWorkoutUseCase:
                     recent_workouts,
                     progression_histories,
                     training_style,
+                    profile,
                 )
             except (
                 AIConfigurationError,
@@ -282,7 +298,10 @@ class GenerateWorkoutUseCase:
                 AIExerciseMappingError,
                 Exception,
             ) as exc:
-                print(f"\n\n[WARNING] AI WORKOUT GENERATION FAILED, FALLING BACK TO RULE-BASED. ERROR: {exc}\n\n", flush=True)
+                print(
+                    f"\n\n[WARNING] AI WORKOUT GENERATION FAILED, FALLING BACK TO RULE-BASED. ERROR: {exc}\n\n",
+                    flush=True,
+                )
                 logger.exception(
                     "AI workout generation failed for user %s mode=%s, falling back to rule-based. error_type=%s error=%s input_payload=%s",
                     command.user_id,
@@ -304,6 +323,7 @@ class GenerateWorkoutUseCase:
                     recent_workouts,
                     progression_histories,
                     training_style,
+                    profile,
                 )
         plan.target_date = command.target_date
         self.safety_policy.validate(
@@ -347,6 +367,7 @@ class GenerateWorkoutUseCase:
         recent_workouts=None,
         progression_histories: dict[UUID, ExercisePerformanceHistory] | None = None,
         training_style: str = "balanced",
+        profile=None,
     ):
         return self.generator.generate(
             user_id=command.user_id,
@@ -366,6 +387,13 @@ class GenerateWorkoutUseCase:
             recent_workouts=recent_workouts,
             progression_histories=progression_histories,
             training_style=training_style,
+            movement_limitations=profile.movement_limitations if profile else [],
+            pain_areas=profile.pain_areas if profile else [],
+            pain_movements=profile.pain_movements if profile else [],
+            lifestyle_type=profile.lifestyle_type if profile else None,
+            sitting_hours_per_day=profile.sitting_hours_per_day if profile else None,
+            training_history=profile.training_history if profile else None,
+            months_inactive=profile.months_inactive if profile else None,
         )
 
     async def _generate_with_ai(
@@ -377,6 +405,9 @@ class GenerateWorkoutUseCase:
         equipment: list[str],
         allowed: list[Exercise],
         training_context: TrainingRecommendationContext | None = None,
+        profile=None,
+        progression_histories: dict[UUID, ExercisePerformanceHistory] | None = None,
+        training_style: str = "balanced",
     ):
         effective_focus = command.focus_muscle
         if effective_focus is None and training_context is not None:
@@ -386,6 +417,12 @@ class GenerateWorkoutUseCase:
             focus_muscle=effective_focus,
             workout_split=command.workout_split,
             avoid_exercises=command.avoid_exercises,
+        )
+        target_min, target_max = self.volume_policy.target_exercise_count(
+            training_level,
+            command.available_time_minutes,
+            training_style,
+            readiness.score,
         )
         context = AIWorkoutGenerationContext(
             user_id=command.user_id,
@@ -409,10 +446,55 @@ class GenerateWorkoutUseCase:
                     equipment=item.equipment_type.value,
                     difficulty=item.training_level.value,
                     movement_type=item.movement_type,
+                    movement_pattern=item.movement_pattern,
+                    exercise_role=item.exercise_role,
                 )
                 for item in ai_allowed
             ],
             user_note=command.user_note,
+            injuries=list(profile.injuries) if profile else [],
+            movement_limitations=list(profile.movement_limitations) if profile else [],
+            pain_areas=list(profile.pain_areas) if profile else [],
+            pain_movements=list(profile.pain_movements) if profile else [],
+            lifestyle_type=profile.lifestyle_type if profile else None,
+            sitting_hours_per_day=profile.sitting_hours_per_day if profile else None,
+            training_history=profile.training_history if profile else None,
+            months_inactive=profile.months_inactive if profile else None,
+            training_style=training_style,
+            target_exercise_count_min=target_min,
+            target_exercise_count_max=target_max,
+            role_distribution=self.volume_policy.target_role_distribution(
+                training_level,
+                command.available_time_minutes,
+                training_style,
+                readiness.score,
+            ),
+            movement_pattern_requirements=self._available_movement_requirements(
+                self._movement_pattern_requirements(
+                    effective_focus, command.workout_split
+                ),
+                ai_allowed,
+            ),
+            equipment_mix_requirements=self._equipment_mix_requirements(
+                equipment, ai_allowed
+            ),
+            ordering_guidelines=[
+                "warmup/activation",
+                "main compound",
+                "secondary compound",
+                "accessory",
+                "isolation",
+                "corrective",
+                "core",
+                "cardio finisher",
+                "cooldown/mobility last",
+            ],
+            progression_context=self._progression_context(
+                ai_allowed,
+                progression_histories,
+                training_level,
+                int(round(readiness.score)),
+            ),
         )
         logger.info(
             "Prepared AI workout context for user %s readiness=%s/%s recommendation=%s focus=%s time=%s equipment=%s allowed_slugs=%s",
@@ -466,6 +548,9 @@ class GenerateWorkoutUseCase:
         usage_date,
         input_payload: dict,
         training_context: TrainingRecommendationContext | None = None,
+        profile=None,
+        progression_histories: dict[UUID, ExercisePerformanceHistory] | None = None,
+        training_style: str = "balanced",
     ):
         request_id = uuid4()
         started = perf_counter()
@@ -478,6 +563,9 @@ class GenerateWorkoutUseCase:
                 equipment,
                 allowed,
                 training_context,
+                profile,
+                progression_histories,
+                training_style,
             )
         except (
             AIConfigurationError,
@@ -490,7 +578,10 @@ class GenerateWorkoutUseCase:
             Exception,
         ) as exc:
             latency_ms = int((perf_counter() - started) * 1000)
-            print(f"\n\n[WARNING] AI WORKOUT GENERATION FAILED (mode={command.generation_mode}). ERROR: {exc}\n\n", flush=True)
+            print(
+                f"\n\n[WARNING] AI WORKOUT GENERATION FAILED (mode={command.generation_mode}). ERROR: {exc}\n\n",
+                flush=True,
+            )
             logger.exception(
                 "AI workout generation failed for user %s mode=%s latency_ms=%s error_type=%s error=%s input_payload=%s",
                 command.user_id,
@@ -596,6 +687,118 @@ class GenerateWorkoutUseCase:
             "reason": context.reason,
         }
 
+    def _effective_training_style(
+        self, profile, requested_style: str, *, has_explicit_override: bool
+    ) -> str:
+        if has_explicit_override:
+            return requested_style
+        history = (profile.training_history or "").strip().lower()
+        if (
+            "returning" in history
+            or "after_break" in history
+            or (profile.months_inactive or 0) >= 3
+        ):
+            return "returning"
+        lifestyle = (profile.lifestyle_type or "").strip().lower()
+        if requested_style == "balanced" and (
+            lifestyle in {"sedentary", "desk_job", "desk_worker"}
+            or (profile.sitting_hours_per_day or 0) >= 8
+        ):
+            return "posture"
+        return requested_style
+
+    def _movement_pattern_requirements(
+        self, focus_muscle: str | None, workout_split: str
+    ) -> list[str]:
+        focus = (focus_muscle or workout_split or "full_body").lower()
+        if focus in {"upper_body_pull", "pull", "back", "upper_pull_posture"}:
+            return ["horizontal_pull", "vertical_pull"]
+        if focus in {"upper_body_push", "push", "chest", "upper_push_balanced"}:
+            return ["horizontal_push", "vertical_push"]
+        if focus in {"lower_body", "legs", "lower_core"}:
+            return ["squat", "hinge"]
+        if focus in {"full_body", "full_body_conditioning"}:
+            return ["squat", "hinge", "horizontal_push", "horizontal_pull"]
+        if focus == "upper_body":
+            return ["horizontal_push", "horizontal_pull"]
+        return []
+
+    def _equipment_mix_requirements(
+        self, equipment: list[str], exercises: list[Exercise] | None = None
+    ) -> list[str]:
+        equipment_categories = {get_equipment_category(item) for item in equipment} - {
+            "other"
+        }
+        exercise_categories = {
+            get_equipment_category(item.equipment_type.value)
+            for item in exercises or []
+        } - {"other"}
+        categories = (
+            equipment_categories & exercise_categories
+            if exercises is not None
+            else equipment_categories
+        )
+        if len(categories) < 3:
+            return ["Use the available equipment without forced diversity."]
+        requirements = ["No equipment category may exceed 60% of exercises."]
+        if "free_weight" in categories:
+            requirements.append("Prefer at least two free-weight exercises.")
+        if categories & {"machine", "cable"}:
+            requirements.append("Include at least one machine or cable exercise.")
+        requirements.append("Include bodyweight or core work when appropriate.")
+        return requirements
+
+    def _available_movement_requirements(
+        self, required: list[str], exercises: list[Exercise]
+    ) -> list[str]:
+        available = {
+            (item.movement_pattern or item.movement_type or "").strip().lower()
+            for item in exercises
+        }
+        return [pattern for pattern in required if pattern in available]
+
+    def _progression_context(
+        self,
+        exercises: list[Exercise],
+        histories: dict[UUID, ExercisePerformanceHistory] | None,
+        training_level: str,
+        readiness_score: int,
+    ) -> list[AIProgressionContext]:
+        if not histories:
+            return []
+        result: list[AIProgressionContext] = []
+        for exercise in exercises:
+            history = histories.get(exercise.id)
+            if history is None or not history.recent_sessions:
+                continue
+            suggestion = self.generator.progression_service.suggest_next_prescription(
+                history=history,
+                default_sets=3,
+                default_reps="8-12",
+                default_rpe=7,
+                training_level=training_level,
+            )
+            suggestion = self.generator.progression_service.apply_readiness_guard(
+                suggestion, history, readiness_score
+            )
+            latest = max(history.recent_sessions, key=lambda item: item.completed_at)
+            completed = [item for item in latest.sets if item.completed]
+            last_performance = ", ".join(
+                f"{item.weight or 0:g}kg x {item.reps or 0} @ RPE {item.rpe or '?'}"
+                for item in completed
+            )
+            result.append(
+                AIProgressionContext(
+                    exercise_slug=exercise.slug,
+                    last_performance=last_performance or None,
+                    progression_action=suggestion.action.value,
+                    suggested_weight=suggestion.suggested_weight,
+                    suggested_reps=suggestion.suggested_reps,
+                    reason=suggestion.reason,
+                )
+            )
+        return result
+
     def _select_ai_allowed_exercises(
         self,
         allowed: list[Exercise],
@@ -604,23 +807,28 @@ class GenerateWorkoutUseCase:
         avoid_exercises: list[str],
     ) -> list[Exercise]:
         avoid_set = {item.strip().lower() for item in avoid_exercises}
+        required_patterns = self._movement_pattern_requirements(
+            focus_muscle, workout_split
+        )
+        focus_muscles = self._focus_muscles(focus_muscle, workout_split)
 
-        def _score(item: Exercise) -> tuple[int, int, int, int, str]:
-            focus_match = int(
-                focus_muscle is not None and item.muscle_group.value == focus_muscle
-            )
+        def _score(item: Exercise) -> tuple[int, int, int, int, int, str]:
+            movement_pattern = self._exercise_movement_pattern(item)
+            focus_match = int(item.muscle_group.value in focus_muscles)
             split_match = int(self._matches_workout_split(item, workout_split))
-            bodyweight_bonus = int(
-                item.equipment_type.value == EquipmentType.BODYWEIGHT.value
-            )
+            required_pattern_match = int(movement_pattern in required_patterns)
             compound_bonus = int(
-                item.movement_type in {"push", "pull", "squat", "hinge", "full_body"}
+                item.exercise_role in {"main_compound", "secondary_compound"}
+            )
+            primary_muscle_bonus = int(
+                item.muscle_group.value not in {"arms", "core", "mobility", "cardio"}
             )
             return (
-                -split_match,
+                -required_pattern_match,
                 -focus_match,
+                -split_match,
                 -compound_bonus,
-                -bodyweight_bonus,
+                -primary_muscle_bonus,
                 item.name,
             )
 
@@ -629,20 +837,145 @@ class GenerateWorkoutUseCase:
             for item in allowed
             if item.slug.lower() not in avoid_set and item.name.lower() not in avoid_set
         ]
-        shortlisted = sorted(filtered, key=_score)[:AI_ALLOWED_EXERCISES_LIMIT]
-        return shortlisted or allowed[:AI_ALLOWED_EXERCISES_LIMIT]
+        if not filtered:
+            return allowed[:AI_ALLOWED_EXERCISES_LIMIT]
+
+        ranked = sorted(filtered, key=_score)
+        selected: list[Exercise] = []
+        selected_ids: set[UUID] = set()
+
+        def add_candidates(candidates: list[Exercise], limit: int) -> None:
+            added = 0
+            for candidate in candidates:
+                if candidate.id in selected_ids:
+                    continue
+                selected.append(candidate)
+                selected_ids.add(candidate.id)
+                added += 1
+                if added >= limit or len(selected) >= AI_ALLOWED_EXERCISES_LIMIT:
+                    break
+
+        # Give the model multiple valid choices for every required movement slot.
+        for pattern in required_patterns:
+            pattern_candidates = [
+                item
+                for item in ranked
+                if self._exercise_movement_pattern(item) == pattern
+            ]
+            add_candidates(
+                self._prefer_distinct_equipment_categories(pattern_candidates),
+                limit=3,
+            )
+
+        # Ensure the prompt contains actual alternatives across available categories.
+        available_categories = {
+            get_equipment_category(item.equipment_type.value) for item in ranked
+        } - {"other"}
+        for category in (
+            "free_weight",
+            "machine",
+            "cable",
+            "bodyweight",
+            "cardio",
+        ):
+            if category not in available_categories:
+                continue
+            category_candidates = [
+                item
+                for item in ranked
+                if get_equipment_category(item.equipment_type.value) == category
+            ]
+            add_candidates(category_candidates, limit=2)
+
+        # Preserve role variety so the model can satisfy the ordering policy.
+        for roles in (
+            {"main_compound", "secondary_compound"},
+            {"accessory"},
+            {"isolation", "corrective"},
+            {"finisher"},
+        ):
+            add_candidates(
+                [item for item in ranked if item.exercise_role in roles],
+                limit=2,
+            )
+
+        for candidate in ranked:
+            if len(selected) >= AI_ALLOWED_EXERCISES_LIMIT:
+                break
+            category = get_equipment_category(candidate.equipment_type.value)
+            if self._shortlist_category_is_full(selected, category):
+                continue
+            add_candidates([candidate], limit=1)
+
+        if len(selected) < AI_ALLOWED_EXERCISES_LIMIT:
+            add_candidates(ranked, AI_ALLOWED_EXERCISES_LIMIT - len(selected))
+        return selected[:AI_ALLOWED_EXERCISES_LIMIT]
+
+    def _focus_muscles(self, focus_muscle: str | None, workout_split: str) -> set[str]:
+        focus = (focus_muscle or workout_split or "full_body").lower()
+        if focus in {"upper_body_push", "upper_push_balanced", "push", "chest"}:
+            return {"chest", "shoulders"}
+        if focus in {"upper_body_pull", "upper_pull_posture", "pull", "back"}:
+            return {"back", "shoulders"}
+        if focus in {"lower_body", "lower_core", "legs"}:
+            return {"legs", "core"}
+        if focus == "upper_body":
+            return {"chest", "back", "shoulders", "arms"}
+        return {"chest", "back", "shoulders", "legs", "core", "full_body"}
+
+    def _exercise_movement_pattern(self, exercise: Exercise) -> str:
+        return (exercise.movement_pattern or exercise.movement_type or "").lower()
+
+    def _prefer_distinct_equipment_categories(
+        self, candidates: list[Exercise]
+    ) -> list[Exercise]:
+        categories: list[str] = []
+        by_category: dict[str, list[Exercise]] = {}
+        for candidate in candidates:
+            category = get_equipment_category(candidate.equipment_type.value)
+            if category not in by_category:
+                categories.append(category)
+                by_category[category] = []
+            by_category[category].append(candidate)
+
+        result: list[Exercise] = []
+        while any(by_category.values()):
+            for category in categories:
+                if by_category[category]:
+                    result.append(by_category[category].pop(0))
+        return result
+
+    def _shortlist_category_is_full(
+        self, selected: list[Exercise], category: str
+    ) -> bool:
+        if category == "other":
+            return False
+        count = sum(
+            get_equipment_category(item.equipment_type.value) == category
+            for item in selected
+        )
+        return count >= AI_ALLOWED_EXERCISES_LIMIT // 2
 
     def _matches_workout_split(self, exercise: Exercise, workout_split: str) -> bool:
         muscle = exercise.muscle_group.value
-        movement = exercise.movement_type or ""
+        movement = self._exercise_movement_pattern(exercise)
         if workout_split == "upper_body":
             return muscle in {"chest", "back", "shoulders", "arms"}
         if workout_split == "lower_body":
             return muscle in {"legs", "core"} or movement in {"squat", "hinge"}
         if workout_split == "push":
-            return muscle in {"chest", "shoulders", "arms"} or movement == "push"
+            return muscle in {"chest", "shoulders", "arms"} or movement in {
+                "horizontal_push",
+                "vertical_push",
+                "elbow_extension",
+            }
         if workout_split == "pull":
-            return muscle in {"back", "arms"} or movement in {"pull", "hinge"}
+            return muscle in {"back", "arms"} or movement in {
+                "horizontal_pull",
+                "vertical_pull",
+                "elbow_flexion",
+                "hinge",
+            }
         return True
 
     def _usage_date(self):

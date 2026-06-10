@@ -14,7 +14,7 @@ class ProgramSchema(BaseModel):
 class CreateProgramRequestSchema(ProgramSchema):
     goal: str
     duration_weeks: int = Field(ge=1, le=52)
-    days_per_week: int = Field(ge=2, le=5)
+    days_per_week: int = Field(ge=2, le=6)
     session_duration_minutes: int = Field(ge=20, le=180)
     preferred_split: Literal["full_body", "upper_lower", "push_pull_legs", "custom"] = (
         "upper_lower"

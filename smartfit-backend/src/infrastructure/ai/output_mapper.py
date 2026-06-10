@@ -34,7 +34,7 @@ class AIWorkoutOutputMapper:
                     target_sets=item.sets,
                     target_reps=item.reps,
                     target_rpe=item.rpe,
-                    target_weight=None,
+                    target_weight=item.target_weight,
                     rest_seconds=item.rest_seconds,
                     notes=item.notes,
                     name=allowed.name,

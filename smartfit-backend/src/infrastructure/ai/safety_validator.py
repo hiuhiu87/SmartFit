@@ -11,6 +11,7 @@ from src.domain.common.exceptions import (
     AIExerciseMappingError,
     AIUnsafeOutputError,
 )
+from src.domain.exercise.equipment_policy import get_equipment_category
 
 
 class AIWorkoutSafetyValidator:
@@ -30,7 +31,18 @@ class AIWorkoutSafetyValidator:
 
         if result.estimated_duration_minutes > context.available_time_minutes + 10:
             raise AIUnsafeOutputError("AI workout exceeds allowed duration window.")
+        exercise_count = len(result.exercises)
+        if not (
+            context.target_exercise_count_min
+            <= exercise_count
+            <= context.target_exercise_count_max
+        ):
+            if not (context.readiness_score < 20 and exercise_count <= 3):
+                raise AIUnsafeOutputError(
+                    "AI workout exercise count is outside the policy target."
+                )
 
+        selected_allowed = []
         for exercise in result.exercises:
             allowed = allowed_by_slug.get(exercise.exercise_slug)
             if allowed is None:
@@ -57,6 +69,27 @@ class AIWorkoutSafetyValidator:
                 raise AIUnsafeOutputError(
                     f"AI selected rest_seconds=0 for non-continuous exercise: {exercise.exercise_slug}"
                 )
+            if self._conflicts_with_limitations(allowed, context):
+                raise AIUnsafeOutputError(
+                    f"AI selected an exercise conflicting with limitations: {allowed.slug}"
+                )
+            selected_allowed.append(allowed)
+
+        selected_patterns = {
+            (item.movement_pattern or item.movement_type or "").strip().lower()
+            for item in selected_allowed
+        }
+        missing_patterns = (
+            set(context.movement_pattern_requirements) - selected_patterns
+        )
+        if missing_patterns:
+            raise AIUnsafeOutputError(
+                f"AI workout is missing required movement patterns: {sorted(missing_patterns)}"
+            )
+
+        self._validate_equipment_mix(selected_allowed, context)
+        self._validate_order(selected_allowed)
+        self._validate_progression(result, context)
 
         if context.readiness_score < 20:
             if result.training_decision not in {"recovery", "rest_day"}:
@@ -70,6 +103,10 @@ class AIWorkoutSafetyValidator:
         elif context.readiness_score < 40:
             if any(item.rpe > 7 for item in result.exercises):
                 raise AIUnsafeOutputError("Low readiness does not allow rpe above 7.")
+        if context.training_style == "returning" and any(
+            item.rpe > 7 for item in result.exercises
+        ):
+            raise AIUnsafeOutputError("Returning training style caps rpe at 7.")
 
     def _allows_zero_rest(self, allowed) -> bool:
         movement_type = (allowed.movement_type or "").strip().lower()
@@ -78,6 +115,110 @@ class AIWorkoutSafetyValidator:
             movement_type in self.ZERO_REST_MOVEMENTS
             or primary_muscle in self.ZERO_REST_MUSCLES
         )
+
+    def _validate_equipment_mix(
+        self, selected: list, context: AIWorkoutGenerationContext
+    ) -> None:
+        available_categories = {
+            get_equipment_category(item.equipment) for item in context.allowed_exercises
+        } - {"other"}
+        if len(available_categories) < 3 or not selected:
+            return
+        categories = [get_equipment_category(item.equipment) for item in selected]
+        largest = max(categories.count(category) for category in set(categories))
+        if largest / len(categories) > 0.6:
+            raise AIUnsafeOutputError(
+                "AI workout overuses one equipment category despite alternatives."
+            )
+
+    def _validate_order(self, selected: list) -> None:
+        buckets = [self._order_bucket(item) for item in selected]
+        if buckets != sorted(buckets):
+            raise AIUnsafeOutputError("AI workout violates exercise ordering policy.")
+
+    def _order_bucket(self, exercise) -> int:
+        pattern = (
+            (exercise.movement_pattern or exercise.movement_type or "").strip().lower()
+        )
+        role = (exercise.exercise_role or "").strip().lower()
+        name = exercise.name.lower()
+        if pattern == "mobility" and (
+            "stretch" in name or "cooldown" in name or role == "cooldown_mobility"
+        ):
+            return 9
+        if pattern == "cardio":
+            return 8
+        if pattern == "core" or role == "core":
+            return 7
+        if role == "corrective":
+            return 6
+        if role == "isolation":
+            return 5
+        if role == "accessory":
+            return 4
+        if role in {"secondary", "secondary_compound"}:
+            return 3
+        if role in {"primary", "primary_compound", "main_compound"}:
+            return 2
+        if pattern == "mobility" or role in {"warmup", "activation"}:
+            return 1
+        return 4
+
+    def _validate_progression(
+        self,
+        result: AIWorkoutGenerationResult,
+        context: AIWorkoutGenerationContext,
+    ) -> None:
+        progression = {item.exercise_slug: item for item in context.progression_context}
+        for exercise in result.exercises:
+            constraint = progression.get(exercise.exercise_slug)
+            if constraint is None:
+                continue
+            if constraint.progression_action in {"reduce_volume", "deload"}:
+                if exercise.sets > 3 or exercise.rpe > 7:
+                    raise AIUnsafeOutputError(
+                        "AI ignored a reduce-volume progression constraint."
+                    )
+            if constraint.progression_action == "reduce_weight" and exercise.rpe > 8:
+                raise AIUnsafeOutputError(
+                    "AI ignored a reduce-weight progression constraint."
+                )
+            if (
+                constraint.suggested_weight is not None
+                and exercise.target_weight is not None
+                and exercise.target_weight > constraint.suggested_weight * 1.1
+            ):
+                raise AIUnsafeOutputError(
+                    "AI exceeded the progression weight recommendation."
+                )
+
+    def _conflicts_with_limitations(
+        self, exercise, context: AIWorkoutGenerationContext
+    ) -> bool:
+        limitations = " ".join(
+            item.lower()
+            for item in [
+                *context.injuries,
+                *context.movement_limitations,
+                *context.pain_areas,
+                *context.pain_movements,
+            ]
+        )
+        pattern = (
+            (exercise.movement_pattern or exercise.movement_type or "").strip().lower()
+        )
+        name = exercise.name.lower()
+        if any(term in limitations for term in {"lower_back", "lower back", "spine"}):
+            if pattern == "horizontal_pull" and any(
+                term in name for term in {"bent over", "bent-over", "unsupported"}
+            ):
+                return True
+        if any(term in limitations for term in {"overhead", "shoulder_overhead"}):
+            if pattern == "vertical_push" or "overhead press" in name:
+                return True
+        if "knee" in limitations and pattern in {"squat", "lunge"}:
+            return True
+        return False
 
 
 class AIChatSafetyValidator:

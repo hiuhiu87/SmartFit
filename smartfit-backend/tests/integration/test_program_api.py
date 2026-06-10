@@ -141,6 +141,8 @@ async def _create_program(
     client: AsyncClient,
     token: str,
     start_date: str = "2026-06-01",
+    days_per_week: int = 4,
+    training_style: str = "balanced",
 ) -> dict:
     response = await client.post(
         "/api/v1/programs",
@@ -148,16 +150,42 @@ async def _create_program(
         json={
             "goal": "muscle_gain",
             "duration_weeks": 6,
-            "days_per_week": 4,
+            "days_per_week": days_per_week,
             "session_duration_minutes": 60,
             "preferred_split": "upper_lower",
             "focus_areas": ["posture", "back"],
             "generation_mode": "rule_based",
+            "training_style": training_style,
             "start_date": start_date,
         },
     )
     assert response.status_code == 200, response.text
     return response.json()["data"]
+
+
+@pytest.mark.asyncio
+async def test_create_returning_6_day_program_includes_light_recovery_days(
+    program_test_context,
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=program_test_context["app"]),
+        base_url="http://testserver",
+    ) as client:
+        _, token = await _register_user(
+            client,
+            program_test_context["session_factory"],
+            "program.returning-six@example.com",
+        )
+        program = await _create_program(
+            client,
+            token,
+            days_per_week=6,
+            training_style="returning",
+        )
+
+    titles = [item["title"].lower() for item in program["weekly_structure"]]
+    assert len(titles) == 6
+    assert any("light" in title or "recovery" in title for title in titles)
 
 
 @pytest.mark.asyncio

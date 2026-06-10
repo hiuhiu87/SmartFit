@@ -75,6 +75,10 @@ class AIWorkoutSchemaValidator:
                 adjustments=adjustments,
             )
             reps = item.get("reps")
+            target_weight = self._coerce_optional_float(
+                item.get("target_weight"),
+                label=f"exercise #{index} target_weight",
+            )
             rest_seconds = self._coerce_rest_seconds(
                 item.get("rest_seconds"),
                 index=index,
@@ -117,6 +121,7 @@ class AIWorkoutSchemaValidator:
                     reps=reps,
                     rest_seconds=rest_seconds,
                     rpe=rpe,
+                    target_weight=target_weight,
                     notes=notes,
                 )
             )
@@ -139,6 +144,17 @@ class AIWorkoutSchemaValidator:
             reasoning_summary=reasoning_summary.strip(),
             safety_note=safety_note.strip(),
         )
+
+    def _coerce_optional_float(self, value, *, label: str) -> float | None:
+        if value is None:
+            return None
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError) as exc:
+            raise AIInvalidOutputError(f"{label} must be numeric or null.") from exc
+        if parsed < 0 or parsed > 1000:
+            raise AIInvalidOutputError(f"{label} is outside the allowed range.")
+        return parsed
 
     def _normalize_decision(self, value) -> str | None:
         if not isinstance(value, str):

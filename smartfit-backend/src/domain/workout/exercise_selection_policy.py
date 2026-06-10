@@ -114,17 +114,14 @@ class ExerciseSelectionPolicy:
         score += self.diversity_policy.diversity_bonus(
             exercise,
             already_selected,
+            list(available_equipment),
             self._target_categories(slot),
         )
-        available_categories = {
-            get_equipment_category(item) for item in available_equipment
-        }
-        if len(
-            available_categories
-        ) >= 3 and self.diversity_policy.would_overuse_equipment(
-            exercise, already_selected, 0.6
-        ):
-            score -= 25
+        score += self.diversity_policy.overuse_penalty(
+            exercise,
+            already_selected,
+            list(available_equipment),
+        )
         if (
             training_level == TrainingLevel.BEGINNER.value
             and self._joint_stress(exercise) == "low"

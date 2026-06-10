@@ -4,7 +4,7 @@ EQUIPMENT_CATEGORIES = {
     "cable": {"cable_machine"},
     "bodyweight": {"bodyweight", "pull_up_bar"},
     "cardio": {"treadmill", "bike", "rowing_machine", "elliptical"},
-    "other": {"resistance_band", "none"},
+    "other": {"resistance_band", "none", "unknown"},
 }
 
 

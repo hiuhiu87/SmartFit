@@ -25,6 +25,8 @@ from src.domain.workout.entities import WorkoutPlan, WorkoutPlanExercise, Workou
 from src.domain.workout.template_resolver import WorkoutTemplateResolver
 from src.domain.workout.training_style_policy import TrainingStylePolicy
 from src.domain.workout.templates import WorkoutSlot, WorkoutTemplate
+from src.domain.workout.workout_ordering_policy import WorkoutOrderingPolicy
+from src.domain.workout.workout_volume_policy import WorkoutVolumePolicy
 
 
 class RuleBasedWorkoutGenerator:
@@ -37,12 +39,16 @@ class RuleBasedWorkoutGenerator:
         progression_service: ProgressionService | None = None,
         diversity_policy: EquipmentDiversityPolicy | None = None,
         training_style_policy: TrainingStylePolicy | None = None,
+        volume_policy: WorkoutVolumePolicy | None = None,
+        ordering_policy: WorkoutOrderingPolicy | None = None,
     ) -> None:
         self.template_resolver = template_resolver or WorkoutTemplateResolver()
         self.selection_policy = selection_policy or ExerciseSelectionPolicy()
         self.progression_service = progression_service or ProgressionService()
         self.diversity_policy = diversity_policy or EquipmentDiversityPolicy()
         self.training_style_policy = training_style_policy or TrainingStylePolicy()
+        self.volume_policy = volume_policy or WorkoutVolumePolicy()
+        self.ordering_policy = ordering_policy or WorkoutOrderingPolicy()
 
     def generate(
         self,
@@ -63,6 +69,13 @@ class RuleBasedWorkoutGenerator:
         recent_workouts: list[WorkoutPlan] | None = None,
         progression_histories: dict[UUID, ExercisePerformanceHistory] | None = None,
         training_style: str = TrainingStyle.BALANCED.value,
+        movement_limitations: list[str] | None = None,
+        pain_areas: list[str] | None = None,
+        pain_movements: list[str] | None = None,
+        lifestyle_type: str | None = None,
+        sitting_hours_per_day: float | None = None,
+        training_history: str | None = None,
+        months_inactive: int | None = None,
     ) -> WorkoutPlan:
         available_equipment = self._normalize_equipment(available_equipment)
         template_focus = self._resolve_training_focus(
@@ -105,6 +118,9 @@ class RuleBasedWorkoutGenerator:
                 training_level=training_level,
                 injuries=injuries or [],
                 training_style=training_style,
+                movement_limitations=movement_limitations or [],
+                pain_areas=pain_areas or [],
+                pain_movements=pain_movements or [],
             )
         ]
         selected_pairs = self._select_template_exercises(
@@ -116,6 +132,13 @@ class RuleBasedWorkoutGenerator:
             readiness_score=adjusted_readiness_score,
             available_time_minutes=available_time_minutes,
             training_style=training_style,
+        )
+        selected_pairs = self._resolve_equipment_diversity(
+            selected_pairs=selected_pairs,
+            exercises=filtered,
+            available_equipment=available_equipment,
+            workout_type=template.id,
+            training_level=training_level,
         )
         selected_pairs = self._fill_to_target_count(
             template=template,
@@ -158,6 +181,12 @@ class RuleBasedWorkoutGenerator:
             )
             for index, (slot, exercise) in enumerate(selected_pairs)
         ]
+        self._apply_muscle_set_caps(
+            plan_exercises,
+            selected_pairs,
+            training_level,
+            adjusted_readiness_score,
+        )
 
         goal_enum = Goal(goal)
         resolved_focus = self._plan_focus(template, template_focus)
@@ -202,7 +231,10 @@ class RuleBasedWorkoutGenerator:
         progression_histories: dict[UUID, ExercisePerformanceHistory] | None,
         training_style: str,
     ) -> WorkoutPlanExercise:
-        target_sets = self._sets_for_slot(slot, readiness_score)
+        target_sets = self.volume_policy.adjust_sets_for_readiness(
+            slot.min_sets if readiness_score < 80 else min(slot.max_sets, 5),
+            readiness_score,
+        )
         target_reps = self._reps_for_slot(slot, goal, readiness_score, training_style)
         target_rpe = self._rpe_for_slot(slot, readiness_score, training_style)
         target_weight = self._suggested_weight(exercise, training_context)
@@ -320,16 +352,22 @@ class RuleBasedWorkoutGenerator:
     def _order_selected_pairs(
         self, selected_pairs: list[tuple[WorkoutSlot, Exercise]]
     ) -> list[tuple[WorkoutSlot, Exercise]]:
+        ordered = self.ordering_policy.sort_exercises(selected_pairs)
         compounds = [
-            pair for pair in selected_pairs if self._slot_order_bucket(pair[0]) == 1
+            pair
+            for pair in ordered
+            if self.ordering_policy.get_order_bucket(pair) in {2, 3}
         ]
-        accessories = [
-            pair for pair in selected_pairs if self._slot_order_bucket(pair[0]) == 2
+        alternating = self._alternate_patterns(compounds)
+        compound_iter = iter(alternating)
+        return [
+            (
+                next(compound_iter)
+                if self.ordering_policy.get_order_bucket(pair) in {2, 3}
+                else pair
+            )
+            for pair in ordered
         ]
-        finishers = [
-            pair for pair in selected_pairs if self._slot_order_bucket(pair[0]) == 3
-        ]
-        return self._alternate_patterns(compounds) + accessories + finishers
 
     def _slot_order_bucket(self, slot: WorkoutSlot) -> int:
         if "cardio" in slot.movement_patterns:
@@ -392,9 +430,11 @@ class RuleBasedWorkoutGenerator:
     ) -> list[tuple[WorkoutSlot, Exercise]]:
         target_count = self._target_exercise_count(
             template=template,
+            training_level=training_level,
             readiness_score=readiness_score,
             available_time_minutes=available_time_minutes,
         )
+        selected_pairs = self._trim_to_target(selected_pairs, target_count, template.id)
         if len(selected_pairs) >= target_count:
             return selected_pairs
 
@@ -433,9 +473,32 @@ class RuleBasedWorkoutGenerator:
 
         return selected_pairs
 
+    def _trim_to_target(
+        self,
+        selected_pairs: list[tuple[WorkoutSlot, Exercise]],
+        target_count: int,
+        workout_type: str,
+    ) -> list[tuple[WorkoutSlot, Exercise]]:
+        if len(selected_pairs) <= target_count:
+            return selected_pairs
+        if workout_type in {"conditioning", "full_body_conditioning"}:
+            cardio = next(
+                (
+                    pair
+                    for pair in selected_pairs
+                    if "cardio" in pair[0].movement_patterns
+                ),
+                None,
+            )
+            if cardio is not None:
+                non_cardio = [pair for pair in selected_pairs if pair is not cardio]
+                return non_cardio[: target_count - 1] + [cardio]
+        return selected_pairs[:target_count]
+
     def _target_exercise_count(
         self,
         template: WorkoutTemplate,
+        training_level: str,
         readiness_score: int,
         available_time_minutes: int,
     ) -> int:
@@ -443,23 +506,13 @@ class RuleBasedWorkoutGenerator:
             if readiness_score < 20:
                 return 2
             return 3
-        if readiness_score >= 60:
-            if available_time_minutes >= 60:
-                return 6
-            if available_time_minutes >= 45:
-                return 5
-            if available_time_minutes >= 30:
-                return 4
-            return 3
-        if readiness_score >= 40:
-            if available_time_minutes >= 60:
-                return 5
-            if available_time_minutes >= 45:
-                return 4
-            return 3
-        if readiness_score >= 20:
-            return 3
-        return 2
+        minimum, maximum = self.volume_policy.target_exercise_count(
+            training_level,
+            available_time_minutes,
+            template.id,
+            readiness_score,
+        )
+        return (minimum + maximum + 1) // 2
 
     def _fill_slots_for_template(self, template: WorkoutTemplate) -> list[WorkoutSlot]:
         base_slots = list(template.slots)
@@ -837,11 +890,22 @@ class RuleBasedWorkoutGenerator:
         training_level: str,
         injuries: list[str],
         training_style: str = "balanced",
+        movement_limitations: list[str] | None = None,
+        pain_areas: list[str] | None = None,
+        pain_movements: list[str] | None = None,
     ) -> bool:
         name = exercise.name.lower()
         movement = exercise.movement_pattern or exercise.movement_type or ""
         equipment = exercise.equipment_type.value
-        normalized_injuries = " ".join(item.lower() for item in injuries)
+        limitations = " ".join(
+            item.lower()
+            for item in [
+                *injuries,
+                *(movement_limitations or []),
+                *(pain_areas or []),
+                *(pain_movements or []),
+            ]
+        )
         beginner_or_returner = (
             training_level == TrainingLevel.BEGINNER.value
             or training_style == TrainingStyle.RETURNING.value
@@ -866,15 +930,92 @@ class RuleBasedWorkoutGenerator:
             and movement in {"squat", "hinge"}
         ):
             return True
-        if any(term in normalized_injuries for term in {"back", "lower_back", "spine"}):
+        if any(term in limitations for term in {"back", "lower_back", "spine"}):
             if equipment == EquipmentType.BARBELL.value and movement in {
                 "squat",
                 "hinge",
             }:
                 return True
-        if "wrist" in normalized_injuries and name in {"push-up", "handstand push-up"}:
+            if movement == "horizontal_pull" and any(
+                term in name for term in {"bent over", "bent-over", "unsupported"}
+            ):
+                return True
+        if any(term in limitations for term in {"overhead", "shoulder_overhead"}):
+            if movement == "vertical_push" or "overhead press" in name:
+                return True
+        if any(term in limitations for term in {"knee", "squat", "lunge"}):
+            if movement in {"squat", "lunge"} and exercise.joint_stress == "high":
+                return True
+        if "wrist" in limitations and name in {"push-up", "handstand push-up"}:
             return True
         return False
+
+    def _resolve_equipment_diversity(
+        self,
+        *,
+        selected_pairs: list[tuple[WorkoutSlot, Exercise]],
+        exercises: list[Exercise],
+        available_equipment: list[str],
+        workout_type: str,
+        training_level: str,
+    ) -> list[tuple[WorkoutSlot, Exercise]]:
+        if not selected_pairs:
+            return selected_pairs
+        candidates_by_slot: list[list[Exercise]] = []
+        available = set(available_equipment)
+        for slot, _ in selected_pairs:
+            candidates_by_slot.append(
+                [
+                    exercise
+                    for exercise in exercises
+                    if (
+                        exercise.equipment_type.value in available
+                        or exercise.equipment_type == EquipmentType.BODYWEIGHT
+                    )
+                    and (
+                        (exercise.movement_pattern or exercise.movement_type)
+                        in slot.movement_patterns
+                        or exercise.muscle_group.value in slot.primary_muscles
+                    )
+                    and not (
+                        training_level == TrainingLevel.BEGINNER.value
+                        and exercise.training_level == TrainingLevel.ADVANCED
+                    )
+                ]
+            )
+        resolved = self.diversity_policy.resolve_diversity_if_needed(
+            [exercise for _, exercise in selected_pairs],
+            candidates_by_slot,
+            {
+                "available_equipment": available_equipment,
+                "workout_type": workout_type,
+            },
+        )
+        return [
+            (slot, exercise)
+            for (slot, _), exercise in zip(selected_pairs, resolved, strict=True)
+        ]
+
+    def _apply_muscle_set_caps(
+        self,
+        plan_exercises: list[WorkoutPlanExercise],
+        selected_pairs: list[tuple[WorkoutSlot, Exercise]],
+        training_level: str,
+        readiness_score: int,
+    ) -> None:
+        used: dict[str, int] = {}
+        for plan_exercise, (_, exercise) in zip(
+            plan_exercises, selected_pairs, strict=True
+        ):
+            muscle = exercise.muscle_group.value
+            if muscle in {"cardio", "mobility"}:
+                continue
+            cap = self.volume_policy.max_quality_sets_per_muscle(
+                training_level, muscle, readiness_score
+            )
+            remaining = max(1, cap - used.get(muscle, 0))
+            plan_exercise.target_sets = min(plan_exercise.target_sets, remaining)
+            used[muscle] = used.get(muscle, 0) + plan_exercise.target_sets
 
     def _plan_focus(
         self, template: WorkoutTemplate, focus_muscle: str | None

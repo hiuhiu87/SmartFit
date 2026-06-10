@@ -112,6 +112,18 @@ class AIAllowedExercise:
     equipment: str
     difficulty: str
     movement_type: str | None = None
+    movement_pattern: str | None = None
+    exercise_role: str | None = None
+
+
+@dataclass(slots=True)
+class AIProgressionContext:
+    exercise_slug: str
+    last_performance: str | None
+    progression_action: str
+    suggested_weight: float | None
+    suggested_reps: str
+    reason: str
 
 
 @dataclass(slots=True)
@@ -130,6 +142,22 @@ class AIWorkoutGenerationContext:
     avoid_exercises: list[str] = field(default_factory=list)
     allowed_exercises: list[AIAllowedExercise] = field(default_factory=list)
     user_note: str | None = None
+    injuries: list[str] = field(default_factory=list)
+    movement_limitations: list[str] = field(default_factory=list)
+    pain_areas: list[str] = field(default_factory=list)
+    pain_movements: list[str] = field(default_factory=list)
+    lifestyle_type: str | None = None
+    sitting_hours_per_day: float | None = None
+    training_history: str | None = None
+    months_inactive: int | None = None
+    training_style: str = "balanced"
+    target_exercise_count_min: int = 1
+    target_exercise_count_max: int = 10
+    role_distribution: dict[str, tuple[int, int]] = field(default_factory=dict)
+    movement_pattern_requirements: list[str] = field(default_factory=list)
+    equipment_mix_requirements: list[str] = field(default_factory=list)
+    ordering_guidelines: list[str] = field(default_factory=list)
+    progression_context: list[AIProgressionContext] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -139,6 +167,7 @@ class AIWorkoutExerciseResult:
     reps: str
     rest_seconds: int
     rpe: int
+    target_weight: float | None = None
     notes: str | None = None
 
 

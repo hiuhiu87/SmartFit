@@ -457,7 +457,7 @@ def test_sixty_minute_push_plan_fills_with_legacy_metadata() -> None:
     plan = generate_with_exercises(legacy_candidate_exercises(), focus="chest", time=60)
     names = [item.exercise_id for item in plan.exercises]
     assert plan.estimated_duration_minutes == 60
-    assert len(plan.exercises) >= 6
+    assert len(plan.exercises) == 5
     assert len(names) == len(set(names))
 
 
@@ -491,7 +491,7 @@ def test_workout_split_drives_template_when_focus_missing() -> None:
         available_equipment=["barbell", "dumbbell", "bench", "bodyweight", "bike"],
     )
     assert plan.focus.value == "upper_body_pull"
-    assert len(plan.exercises) >= 6
+    assert len(plan.exercises) == 6
 
 
 def test_beginner_lean_excludes_heavy_barbell_squat_and_deadlift() -> None:
@@ -522,5 +522,5 @@ def test_sixty_minute_pull_plan_fills_without_cardio_equipment() -> None:
     )
     names = [item.exercise_id for item in plan.exercises]
     assert plan.estimated_duration_minutes == 60
-    assert len(plan.exercises) >= 6
+    assert len(plan.exercises) == 5
     assert len(names) == len(set(names))

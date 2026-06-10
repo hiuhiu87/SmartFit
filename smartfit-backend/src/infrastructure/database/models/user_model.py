@@ -48,6 +48,23 @@ class UserProfileModel(SQLModel, table=True):
         default_factory=list, sa_column=Column(POSTGRES_STRING_ARRAY, nullable=False)
     )
     notes: str | None = Field(default=None, max_length=2000)
+    lifestyle_type: str | None = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    sitting_hours_per_day: float | None = Field(default=None)
+    training_history: str | None = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    months_inactive: int | None = Field(default=None)
+    movement_limitations: list[str] = Field(
+        default_factory=list, sa_column=Column(POSTGRES_STRING_ARRAY, nullable=False)
+    )
+    pain_areas: list[str] = Field(
+        default_factory=list, sa_column=Column(POSTGRES_STRING_ARRAY, nullable=False)
+    )
+    pain_movements: list[str] = Field(
+        default_factory=list, sa_column=Column(POSTGRES_STRING_ARRAY, nullable=False)
+    )
     created_at: datetime = Field(
         default_factory=utcnow,
         sa_column=Column(DateTime(timezone=True), nullable=False),

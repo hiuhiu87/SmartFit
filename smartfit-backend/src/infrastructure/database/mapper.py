@@ -81,6 +81,19 @@ def user_profile_model_to_domain(model: UserProfileModel) -> UserProfile:
         primary_goal=Goal(model.primary_goal),
         injuries=list(model.injuries),
         notes=model.notes,
+        lifestyle_type=model.lifestyle_type,
+        sitting_hours_per_day=model.sitting_hours_per_day,
+        training_history=model.training_history,
+        months_inactive=model.months_inactive,
+        movement_limitations=(
+            list(model.movement_limitations)
+            if model.movement_limitations is not None
+            else []
+        ),
+        pain_areas=list(model.pain_areas) if model.pain_areas is not None else [],
+        pain_movements=(
+            list(model.pain_movements) if model.pain_movements is not None else []
+        ),
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -99,6 +112,13 @@ def user_profile_domain_to_model(entity: UserProfile) -> UserProfileModel:
         primary_goal=entity.primary_goal.value,
         injuries=entity.injuries,
         notes=entity.notes,
+        lifestyle_type=entity.lifestyle_type,
+        sitting_hours_per_day=entity.sitting_hours_per_day,
+        training_history=entity.training_history,
+        months_inactive=entity.months_inactive,
+        movement_limitations=entity.movement_limitations,
+        pain_areas=entity.pain_areas,
+        pain_movements=entity.pain_movements,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
     )

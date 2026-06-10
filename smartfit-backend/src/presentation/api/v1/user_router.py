@@ -46,6 +46,13 @@ async def get_me(
                     "primary_goal": profile.profile.primary_goal,
                     "injuries": profile.profile.injuries,
                     "notes": profile.profile.notes,
+                    "lifestyle_type": profile.profile.lifestyle_type,
+                    "sitting_hours_per_day": profile.profile.sitting_hours_per_day,
+                    "training_history": profile.profile.training_history,
+                    "months_inactive": profile.profile.months_inactive,
+                    "movement_limitations": profile.profile.movement_limitations,
+                    "pain_areas": profile.profile.pain_areas,
+                    "pain_movements": profile.profile.pain_movements,
                 }
             ),
             "equipment_types": profile.equipment_types,
@@ -75,6 +82,13 @@ async def update_profile(
             "primary_goal": result.primary_goal,
             "injuries": result.injuries,
             "notes": result.notes,
+            "lifestyle_type": result.lifestyle_type,
+            "sitting_hours_per_day": result.sitting_hours_per_day,
+            "training_history": result.training_history,
+            "months_inactive": result.months_inactive,
+            "movement_limitations": result.movement_limitations,
+            "pain_areas": result.pain_areas,
+            "pain_movements": result.pain_movements,
         }
     )
 

@@ -32,6 +32,13 @@ class GetCurrentUserProfileUseCase:
                 primary_goal=profile.primary_goal.value,
                 injuries=profile.injuries,
                 notes=profile.notes,
+                lifestyle_type=profile.lifestyle_type,
+                sitting_hours_per_day=profile.sitting_hours_per_day,
+                training_history=profile.training_history,
+                months_inactive=profile.months_inactive,
+                movement_limitations=profile.movement_limitations,
+                pain_areas=profile.pain_areas,
+                pain_movements=profile.pain_movements,
             )
         return CurrentUserDTO(
             user_id=user.id,
@@ -67,6 +74,13 @@ class UpdateUserProfileUseCase:
             primary_goal=command.primary_goal,
             injuries=command.injuries,
             notes=command.notes,
+            lifestyle_type=command.lifestyle_type,
+            sitting_hours_per_day=command.sitting_hours_per_day,
+            training_history=command.training_history,
+            months_inactive=command.months_inactive,
+            movement_limitations=command.movement_limitations,
+            pain_areas=command.pain_areas,
+            pain_movements=command.pain_movements,
             created_at=existing.created_at if existing and existing.created_at else now,
             updated_at=now,
         )
@@ -82,6 +96,13 @@ class UpdateUserProfileUseCase:
             primary_goal=saved.primary_goal.value,
             injuries=saved.injuries,
             notes=saved.notes,
+            lifestyle_type=saved.lifestyle_type,
+            sitting_hours_per_day=saved.sitting_hours_per_day,
+            training_history=saved.training_history,
+            months_inactive=saved.months_inactive,
+            movement_limitations=saved.movement_limitations,
+            pain_areas=saved.pain_areas,
+            pain_movements=saved.pain_movements,
         )
 
 
