@@ -6,6 +6,9 @@ final class OnboardingViewModel: ObservableObject {
     enum Step: Int, CaseIterable {
         case goal
         case trainingLevel
+        case lifestyle
+        case trainingHistory
+        case limitations
         case trainingStyle
         case schedule
         case equipment
@@ -15,6 +18,9 @@ final class OnboardingViewModel: ObservableObject {
             switch self {
             case .goal: "Your Goal"
             case .trainingLevel: "Training Level"
+            case .lifestyle: "Daily Lifestyle"
+            case .trainingHistory: "Training History"
+            case .limitations: "Movement Comfort"
             case .trainingStyle: "Training Style"
             case .schedule: "Weekly Schedule"
             case .equipment: "Available Equipment"
@@ -27,6 +33,11 @@ final class OnboardingViewModel: ObservableObject {
     @Published var selectedGoal = "general_health"
     @Published var selectedTrainingLevel = "beginner"
     @Published var selectedTrainingStyle = "balanced"
+    @Published var selectedLifestyleType: String?
+    @Published var sittingHoursPerDay = 8.0
+    @Published var selectedTrainingHistory: String?
+    @Published var monthsInactive = 3
+    @Published var selectedLimitations: Set<String> = []
     @Published var trainingDaysPerWeek = 3
     @Published var selectedEquipment: Set<String> = ["bodyweight"]
     @Published var acceptedSafetyDisclaimer = false
@@ -47,6 +58,29 @@ final class OnboardingViewModel: ObservableObject {
         .init(id: "beginner", title: "Beginner", subtitle: "New to structured training or restarting."),
         .init(id: "intermediate", title: "Intermediate", subtitle: "Comfortable with consistent gym sessions."),
         .init(id: "advanced", title: "Advanced", subtitle: "Experienced lifter with strong exercise literacy."),
+    ]
+
+    let lifestyleOptions: [OnboardingOption] = [
+        .init(id: "sedentary", title: "Mostly sitting", subtitle: "Most of my day is spent seated, with light movement."),
+        .init(id: "moderately_active", title: "Moderately active", subtitle: "I move regularly through errands, walking, or a mixed workday."),
+        .init(id: "active", title: "Active job or lifestyle", subtitle: "My day already includes plenty of standing, walking, or physical work."),
+    ]
+
+    let trainingHistoryOptions: [OnboardingOption] = [
+        .init(id: "new_to_training", title: "New to training", subtitle: "I am learning the basics and building a comfortable routine."),
+        .init(id: "returning_after_break", title: "Returning after a break", subtitle: "I have trained before and want a gradual return."),
+        .init(id: "beginner_consistent", title: "Beginner but consistent", subtitle: "I train regularly and am still building confidence."),
+        .init(id: "intermediate", title: "Intermediate", subtitle: "I am comfortable with structured workouts and common exercises."),
+        .init(id: "advanced", title: "Advanced", subtitle: "I have substantial training experience and strong exercise awareness."),
+    ]
+
+    let limitationOptions: [OnboardingOption] = [
+        .init(id: "shoulder_overhead", title: "Shoulder overhead discomfort", subtitle: "Overhead positions may need a more comfortable alternative."),
+        .init(id: "lower_back_sensitive", title: "Lower back sensitive", subtitle: "Supported and stable positions usually feel better."),
+        .init(id: "knee_discomfort", title: "Knee discomfort", subtitle: "Squat and lunge choices may need thoughtful adjustments."),
+        .init(id: "wrist_pressure", title: "Wrist pressure", subtitle: "Loaded wrist positions can sometimes feel uncomfortable."),
+        .init(id: "hip_mobility_limitation", title: "Hip mobility limitation", subtitle: "Some deep hip positions may need a smaller range of motion."),
+        .init(id: "none", title: "None", subtitle: "I do not have a movement limitation to note right now."),
     ]
 
     let trainingStyleOptions: [OnboardingOption] = [
@@ -104,11 +138,41 @@ final class OnboardingViewModel: ObservableObject {
         }
     }
 
-    func submitOnboarding() async {
-        guard validateCurrentStep() else { return }
+    func selectTrainingHistory(_ history: String) {
+        selectedTrainingHistory = history
+        switch history {
+        case "new_to_training", "returning_after_break", "beginner_consistent":
+            selectedTrainingLevel = "beginner"
+        case "intermediate":
+            selectedTrainingLevel = "intermediate"
+        case "advanced":
+            selectedTrainingLevel = "advanced"
+        default:
+            break
+        }
+        if history == "returning_after_break" {
+            selectedTrainingStyle = "returning"
+        }
+    }
+
+    func toggleLimitation(_ limitation: String) {
+        if limitation == "none" {
+            selectedLimitations = selectedLimitations == ["none"] ? [] : ["none"]
+            return
+        }
+        selectedLimitations.remove("none")
+        if selectedLimitations.contains(limitation) {
+            selectedLimitations.remove(limitation)
+        } else {
+            selectedLimitations.insert(limitation)
+        }
+    }
+
+    func submitOnboarding() async -> Bool {
+        guard validateCurrentStep() else { return false }
         guard let repository else {
             errorMessage = "App environment is not ready."
-            return
+            return false
         }
 
         isSubmitting = true
@@ -124,7 +188,14 @@ final class OnboardingViewModel: ObservableObject {
             primaryGoal: selectedGoal,
             injuries: appState?.currentUser?.profile?.injuries ?? [],
             notes: "preferred_workout_days_per_week=\(trainingDaysPerWeek)",
-            trainingStyle: selectedTrainingStyle
+            trainingStyle: selectedTrainingStyle,
+            lifestyleType: selectedLifestyleType,
+            sittingHoursPerDay: selectedLifestyleType == nil ? nil : sittingHoursPerDay,
+            trainingHistory: selectedTrainingHistory,
+            monthsInactive: selectedTrainingHistory == "returning_after_break" ? monthsInactive : nil,
+            movementLimitations: movementLimitations,
+            painAreas: painAreas,
+            painMovements: painMovements
         )
 
         do {
@@ -134,11 +205,13 @@ final class OnboardingViewModel: ObservableObject {
             )
             let user = try await repository.fetchCurrentUser()
             appState?.applyAuthenticatedUser(user)
+            return true
         } catch {
             #if DEBUG
             print("Onboarding submit error: \(error)")
             #endif
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Unable to complete onboarding."
+            return false
         }
     }
 
@@ -147,6 +220,8 @@ final class OnboardingViewModel: ObservableObject {
         case .goal:
             return true
         case .trainingLevel:
+            return true
+        case .lifestyle, .trainingHistory, .limitations:
             return true
         case .trainingStyle:
             return true
@@ -176,6 +251,11 @@ final class OnboardingViewModel: ObservableObject {
         selectedGoal = user.profile?.primaryGoal ?? selectedGoal
         selectedTrainingLevel = user.profile?.trainingLevel ?? selectedTrainingLevel
         selectedTrainingStyle = user.profile?.trainingStyle ?? selectedTrainingStyle
+        selectedLifestyleType = user.profile?.lifestyleType
+        sittingHoursPerDay = user.profile?.sittingHoursPerDay ?? sittingHoursPerDay
+        selectedTrainingHistory = user.profile?.trainingHistory
+        monthsInactive = user.profile?.monthsInactive ?? monthsInactive
+        selectedLimitations = Set(user.profile?.movementLimitations ?? [])
         if let notes = user.profile?.notes,
            let days = notes.components(separatedBy: "=").last,
            let value = Int(days.trimmingCharacters(in: .whitespacesAndNewlines)),
@@ -185,6 +265,34 @@ final class OnboardingViewModel: ObservableObject {
         if !user.equipmentTypes.isEmpty {
             selectedEquipment = Set(user.equipmentTypes)
         }
+    }
+
+    private var movementLimitations: [String] {
+        selectedLimitations
+            .filter { $0 != "none" }
+            .sorted()
+    }
+
+    private var painAreas: [String] {
+        let mapping = [
+            "shoulder_overhead": "shoulder",
+            "lower_back_sensitive": "lower_back",
+            "knee_discomfort": "knee",
+            "wrist_pressure": "wrist",
+            "hip_mobility_limitation": "hip",
+        ]
+        return movementLimitations.compactMap { mapping[$0] }.sorted()
+    }
+
+    private var painMovements: [String] {
+        let mapping = [
+            "shoulder_overhead": "overhead_press",
+            "lower_back_sensitive": "unsupported_hinge_or_row",
+            "knee_discomfort": "squat_or_lunge",
+            "wrist_pressure": "loaded_wrist_extension",
+            "hip_mobility_limitation": "deep_hip_flexion",
+        ]
+        return movementLimitations.compactMap { mapping[$0] }.sorted()
     }
 }
 

@@ -10,6 +10,13 @@ struct UserProfile: Codable {
     let injuries: [String]
     let notes: String?
     let trainingStyle: String?
+    let lifestyleType: String?
+    let sittingHoursPerDay: Double?
+    let trainingHistory: String?
+    let monthsInactive: Int?
+    let movementLimitations: [String]?
+    let painAreas: [String]?
+    let painMovements: [String]?
 
     enum CodingKeys: String, CodingKey {
         case fullName = "full_name"
@@ -21,6 +28,13 @@ struct UserProfile: Codable {
         case injuries
         case notes
         case trainingStyle = "training_style"
+        case lifestyleType = "lifestyle_type"
+        case sittingHoursPerDay = "sitting_hours_per_day"
+        case trainingHistory = "training_history"
+        case monthsInactive = "months_inactive"
+        case movementLimitations = "movement_limitations"
+        case painAreas = "pain_areas"
+        case painMovements = "pain_movements"
     }
 }
 
@@ -63,6 +77,13 @@ struct ProfileUpdateRequest: Codable {
     let injuries: [String]
     let notes: String?
     let trainingStyle: String?
+    let lifestyleType: String?
+    let sittingHoursPerDay: Double?
+    let trainingHistory: String?
+    let monthsInactive: Int?
+    let movementLimitations: [String]
+    let painAreas: [String]
+    let painMovements: [String]
 
     enum CodingKeys: String, CodingKey {
         case fullName = "full_name"
@@ -74,6 +95,13 @@ struct ProfileUpdateRequest: Codable {
         case injuries
         case notes
         case trainingStyle = "training_style"
+        case lifestyleType = "lifestyle_type"
+        case sittingHoursPerDay = "sitting_hours_per_day"
+        case trainingHistory = "training_history"
+        case monthsInactive = "months_inactive"
+        case movementLimitations = "movement_limitations"
+        case painAreas = "pain_areas"
+        case painMovements = "pain_movements"
     }
 }
 

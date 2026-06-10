@@ -87,16 +87,21 @@ struct ServerConfigurationSection: View {
                             Text("Developer Server")
                                 .font(AppTypography.title)
                                 .foregroundStyle(AppColors.textPrimary)
-                            Text("Override API base URL for local backend testing.")
-                                .font(AppTypography.caption)
-                                .foregroundStyle(AppColors.textSecondary)
+                            Text(
+                                "Override API base URL for local backend testing."
+                            )
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.textSecondary)
                         }
 
                         Spacer()
 
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
+                        Image(
+                            systemName: isExpanded
+                                ? "chevron.up" : "chevron.down"
+                        )
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
                     }
                 }
                 .buttonStyle(.plain)
@@ -111,9 +116,11 @@ struct ServerConfigurationSection: View {
 
     private var configurationContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("This is only for development. Use your Mac's LAN IP when testing on a real device.")
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
+            Text(
+                "This is only for development. Use your Mac's LAN IP when testing on a real device."
+            )
+            .font(AppTypography.caption)
+            .foregroundStyle(AppColors.textSecondary)
 
             AppInputField {
                 TextField("http://192.168.1.23:8000", text: $baseURLInput)
@@ -129,7 +136,9 @@ struct ServerConfigurationSection: View {
                     .foregroundStyle(AppColors.textSecondary)
                     .textSelection(.enabled)
 
-                if let customURL = appState.environment.baseURLStore.customBaseURL {
+                if let customURL = appState.environment.baseURLStore
+                    .customBaseURL
+                {
                     Text("Override: \(customURL.absoluteString)")
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.textSecondary)
@@ -167,11 +176,15 @@ struct ServerConfigurationSection: View {
 
     private func save() {
         do {
-            try appState.environment.baseURLStore.saveCustomBaseURL(baseURLInput)
+            try appState.environment.baseURLStore.saveCustomBaseURL(
+                baseURLInput
+            )
             syncInputFromStore()
             errorMessage = nil
+            isPresentingSheet = false
         } catch {
-            errorMessage = "Invalid URL. Use http://<your-mac-ip>:8000 or https://..."
+            errorMessage =
+                "Invalid URL. Use http://<your-mac-ip>:8000 or https://..."
         }
     }
 }

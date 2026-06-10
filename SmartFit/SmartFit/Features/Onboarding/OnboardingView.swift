@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
     @StateObject private var viewModel = OnboardingViewModel()
 
@@ -48,6 +49,12 @@ struct OnboardingView: View {
             GoalSelectionView(viewModel: viewModel)
         case .trainingLevel:
             TrainingLevelView(viewModel: viewModel)
+        case .lifestyle:
+            LifestyleAssessmentView(viewModel: viewModel)
+        case .trainingHistory:
+            TrainingHistoryView(viewModel: viewModel)
+        case .limitations:
+            MovementLimitationsView(viewModel: viewModel)
         case .trainingStyle:
             TrainingStyleView(viewModel: viewModel)
         case .schedule:
@@ -63,12 +70,24 @@ struct OnboardingView: View {
         VStack(spacing: 12) {
             if viewModel.currentStep == .safety {
                 PrimaryButton(title: "Finish Setup", isLoading: viewModel.isSubmitting) {
-                    Task { await viewModel.submitOnboarding() }
+                    Task {
+                        if await viewModel.submitOnboarding() {
+                            dismiss()
+                        }
+                    }
                 }
             } else {
                 PrimaryButton(title: "Continue") {
                     viewModel.goToNextStep()
                 }
+            }
+
+            if viewModel.currentStep.isOptionalAssessment {
+                Button("Skip for now") {
+                    viewModel.goToNextStep()
+                }
+                .font(AppTypography.body.weight(.semibold))
+                .foregroundStyle(AppColors.textSecondary)
             }
 
             if viewModel.currentStep.rawValue > 0 {
@@ -80,5 +99,11 @@ struct OnboardingView: View {
             }
         }
         .padding(24)
+    }
+}
+
+private extension OnboardingViewModel.Step {
+    var isOptionalAssessment: Bool {
+        self == .lifestyle || self == .trainingHistory || self == .limitations
     }
 }
