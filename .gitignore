@@ -94,3 +94,4 @@ tmp/
 temp/
 *.sqlite
 *.sqlite3
+project-overview.md
